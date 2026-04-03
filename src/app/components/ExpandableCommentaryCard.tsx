@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "./ui/utils";
 
 interface ExpandableCommentaryCardProps {
@@ -37,9 +38,17 @@ export function ExpandableCommentaryCard({
         className
       )}
     >
-      <h4 className={cn("text-sm font-semibold uppercase tracking-[0.18em]", titleClassName)}>
-        {title}
-      </h4>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className={cn("text-sm font-semibold uppercase tracking-[0.18em]", titleClassName)}>
+          {title}
+        </h4>
+        <motion.div
+          animate={{ rotate: isHovered ? 90 : 0 }}
+          transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+        >
+          <ChevronRight className={cn("h-4 w-4", titleClassName)} />
+        </motion.div>
+      </div>
       <AnimatePresence>
         {isHovered && (
           <motion.div
