@@ -225,6 +225,7 @@ export function GuidedQuestionsScreen() {
   };
 
   const goToQuestion = (nextIndex: number, direction: "left" | "right") => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     setSlideDirection(direction);
     window.setTimeout(() => {
       setCurrentIndex(nextIndex);
