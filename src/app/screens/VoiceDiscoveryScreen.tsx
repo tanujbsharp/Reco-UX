@@ -298,8 +298,8 @@ export function VoiceDiscoveryScreen() {
                     </div>
                   </div>
 
-                  {state === "recording" && (
-                    <div className="mt-8 flex items-end gap-1">
+                  {state === "recording" ? (
+                    <div className="mt-8 flex h-[44px] items-end gap-1">
                       {[18, 28, 44, 30, 22].map((height, index) => (
                         <motion.div
                           key={height}
@@ -313,6 +313,8 @@ export function VoiceDiscoveryScreen() {
                         />
                       ))}
                     </div>
+                  ) : (
+                    <div className="mt-8 h-[44px]" />
                   )}
                 </div>
 
@@ -330,7 +332,9 @@ export function VoiceDiscoveryScreen() {
                   >
                     {state === "recording" ? "Done recording" : "Start voice capture"}
                   </Button>
-                  <p className="text-sm text-slate-500">Multilingual input works best when the customer speaks naturally.</p>
+                  <p className="text-sm text-slate-500 min-h-[20px]">
+                    {state === "idle" && "Multilingual input works best when the customer speaks naturally."}
+                  </p>
                 </div>
               </div>
             ) : (

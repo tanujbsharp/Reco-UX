@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { Check, CheckCheck, Edit2, Keyboard, Mic, X } from "lucide-react";
@@ -144,7 +144,7 @@ export function VoiceResultsScreen() {
                     {/* Content wrapper relative to sit above backgrounds */}
                     <div className="relative flex w-full min-w-0 flex-1 flex-col gap-4 md:flex-row md:items-center">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                        <div className="text-[12px] font-bold uppercase tracking-wider text-slate-400">
                           {tag.category.replace("-", " ")}
                         </div>
                         {editingId === tag.id ? (
