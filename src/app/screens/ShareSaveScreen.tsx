@@ -40,7 +40,7 @@ export function ShareSaveScreen() {
 
   const primaryProduct = shortlistedProducts[0] ?? mockProducts[0];
   const emailSubject = `Your Bsharp Reco shortlist: ${shortlistedProducts.map((product) => product.model).join(", ")}`;
-  const emailBody = `Hi ${customerInfo.name || "there"},\n\nHere are the Mac recommendations prepared for you at Bsharp Reco.\n\n${shortlistedProducts
+  const emailBody = `Hi ${customerInfo.name || "there"},\n\nHere are the PC recommendations prepared for you at Bsharp Reco.\n\n${shortlistedProducts
     .map(
       (product, index) =>
         `${index + 1}. ${product.model}\n   Why it fits: ${product.fitSummary}\n   Price: ₹${product.price.toLocaleString()}\n   Best for: ${product.bestFor}`
@@ -100,7 +100,7 @@ export function ShareSaveScreen() {
             <div>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Share your recommendations</h1>
               <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-                Prepare a polished WhatsApp or email summary with the shortlisted Macs, their fit reasoning, and the next-step suggestion from the store team.
+                Prepare a polished WhatsApp or email summary with the shortlisted PCs, their fit reasoning, and the next-step suggestion from the store team.
               </p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export function ShareSaveScreen() {
               <div className="space-y-6 p-6 md:p-7">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-semibold text-slate-950">Shortlisted Macs</h2>
+                    <h2 className="text-2xl font-semibold text-slate-950">Shortlisted PCs</h2>
                     <p className="mt-1 text-sm text-slate-500">Compact cards the customer can take away digitally.</p>
                   </div>
                   <Badge variant="outline" className="rounded-full border-slate-200 px-3 py-1 text-slate-600">

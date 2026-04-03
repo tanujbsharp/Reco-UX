@@ -95,7 +95,7 @@ export function ProcessingScreen() {
             </motion.div>
           </div>
 
-          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Finding your best Mac matches...</h1>
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Finding your best PC matches...</h1>
           <p className="mt-4 text-lg leading-8 text-slate-600">
             We&apos;re weighing portability, workflow fit, battery life, display preference, and long-term headroom before showing the strongest recommendations.
           </p>

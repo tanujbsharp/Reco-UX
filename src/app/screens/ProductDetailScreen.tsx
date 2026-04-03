@@ -48,7 +48,7 @@ export function ProductDetailScreen() {
             <div className="space-y-4 p-8 text-center">
               <h1 className="text-3xl font-semibold text-slate-950">Product not found</h1>
               <p className="text-base leading-7 text-slate-600">
-                This Mac detail view isn&apos;t available in the mock catalog anymore.
+                This PC detail view isn&apos;t available in the mock catalog anymore.
               </p>
               <Button
                 onClick={() => navigate("/recommendations")}
@@ -130,7 +130,7 @@ export function ProductDetailScreen() {
         <p className="mt-2 text-sm leading-6 text-slate-700">
           {comparedAgainst
             ? `${comparedAgainst.model} is pinned for comparison. This model wins on ${product.bestFor.toLowerCase()}.`
-            : "No second Mac is pinned yet for direct comparison."}
+            : "No second PC is pinned yet for direct comparison."}
         </p>
       </div>
     </div>
@@ -140,7 +140,7 @@ export function ProductDetailScreen() {
     <TwoZoneLayout
       commentary={commentary}
       commentaryTitle="Product detail"
-      commentarySubtitle="Premium Mac detail view with selling guidance"
+      commentarySubtitle="Premium PC detail view with selling guidance"
       progressStep={6}
       progressTotal={8}
       stepLabel="Step 6 of 8"
@@ -466,7 +466,7 @@ export function ProductDetailScreen() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="text-sm leading-6 text-slate-600">
               {compareLocked
-                ? "Two Macs are already in the comparison tray. Remove one to shortlist this model too."
+                ? "Two PCs are already in the comparison tray. Remove one to shortlist this model too."
                 : "Use this sticky bar to move from detail into shortlist or the store handoff."}
             </div>
 

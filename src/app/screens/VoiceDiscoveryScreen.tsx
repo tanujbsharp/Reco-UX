@@ -126,7 +126,7 @@ export function VoiceDiscoveryScreen() {
         </div>
         <p className="text-sm leading-6 text-slate-600">
           {state === "idle" && discoveryMode === "voice" && mockCommentary.voiceIdle}
-          {state === "idle" && discoveryMode === "text" && "Type naturally in any language. Describe the workflow, portability needs, battery expectations, or anything else that should shape the Mac shortlist."}
+          {state === "idle" && discoveryMode === "text" && "Type naturally in any language. Describe the workflow, portability needs, battery expectations, or anything else that should shape the PC shortlist."}
           {state === "recording" && mockCommentary.voiceRecording}
           {state === "processing" && mockCommentary.voiceProcessing}
         </p>
@@ -203,7 +203,7 @@ export function VoiceDiscoveryScreen() {
                   Tell us what you&apos;re looking for
                 </h1>
                 <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-                  Speak naturally in any language or type out the need. We&apos;ll extract the important buying signals and use them to shape the Mac shortlist.
+                  Speak naturally in any language or type out the need. We&apos;ll extract the important buying signals and use them to shape the PC shortlist.
                 </p>
               </div>
             </div>
@@ -343,7 +343,7 @@ export function VoiceDiscoveryScreen() {
                   <Textarea
                     value={textInput}
                     onChange={(event) => setTextInput(event.target.value)}
-                    placeholder="Example: I need a MacBook for daily travel, coding, and some light design work. Battery life matters a lot, and I am deciding between an Air and a 14-inch Pro."
+                    placeholder="Example: I need a PCBook for daily travel, coding, and some light design work. Battery life matters a lot, and I am deciding between an Air and a 14-inch Pro."
                     className="min-h-[220px] rounded-[22px] border-slate-200 bg-slate-50 p-5 text-base leading-7"
                     disabled={state === "processing"}
                   />

@@ -86,7 +86,7 @@ export function VoiceResultsScreen() {
             <div>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">Here&apos;s what we picked up</h1>
               <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                Review the key Mac-buying signals we extracted. Keep what feels right, remove what doesn&apos;t, and edit anything that needs a better phrase.
+                Review the key PC-buying signals we extracted. Keep what feels right, remove what doesn&apos;t, and edit anything that needs a better phrase.
               </p>
             </div>
           </motion.div>

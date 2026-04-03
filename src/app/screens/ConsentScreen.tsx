@@ -39,7 +39,7 @@ export function ConsentScreen() {
         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563eb]/10">
           <UserRound className="h-6 w-6 text-[#2563eb]" />
         </div>
-        <h4 className="text-base font-semibold text-slate-900">Welcome to your guided Mac journey</h4>
+        <h4 className="text-base font-semibold text-slate-900">Welcome to your guided PC journey</h4>
         <p className="mt-2 text-sm leading-6 text-slate-600">{mockCommentary.consent}</p>
       </div>
 
@@ -94,7 +94,7 @@ export function ConsentScreen() {
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Let&apos;s get started</h1>
                 <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                  Tell us a bit about the customer so we can personalize the Mac recommendation journey and make the in-store handoff smoother later.
+                  Tell us a bit about the customer so we can personalize the PC recommendation journey and make the in-store handoff smoother later.
                 </p>
               </div>
             </div>

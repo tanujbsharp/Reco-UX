@@ -368,7 +368,7 @@ export function GuidedQuestionsScreen() {
       >
         <p className="text-sm leading-6 text-slate-600">
           {mockCommentary.questions[currentQuestion.id as keyof typeof mockCommentary.questions] ||
-            "This helps us pick the most relevant Mac fit."}
+            "This helps us pick the most relevant PC fit."}
         </p>
       </ExpandableCommentaryCard>
 

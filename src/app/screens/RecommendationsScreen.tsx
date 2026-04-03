@@ -282,8 +282,8 @@ export function RecommendationsScreen() {
         <h4 className="text-sm font-semibold text-slate-900">Comparison selection</h4>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           {compareLimitReached
-            ? "Two Macs selected and ready for side-by-side comparison."
-            : "Select exactly two Macs to compare side by side with full implications."}
+            ? "Two PCs selected and ready for side-by-side comparison."
+            : "Select exactly two PCs to compare side by side with full implications."}
         </p>
         {compareLimitReached && (
           <div className="mt-3 text-sm font-semibold text-emerald-700">
@@ -318,7 +318,7 @@ export function RecommendationsScreen() {
                 Recommendation results
               </div>
               <div>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Your top Mac recommendations</h1>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Your top PC recommendations</h1>
                 <p className="mt-2 max-w-3xl text-base leading-7 text-slate-600">
                   A premium shortlist ranked by fit. Tap any card to see the full rationale in the panel.
                 </p>

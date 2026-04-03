@@ -39,10 +39,10 @@ export function LandingScreen() {
                     Store login
                   </div>
                   <h1 className="max-w-2xl text-5xl font-semibold tracking-tight text-slate-950 md:text-6xl">
-                    Premium in-store Mac recommendations, built for guided selling.
+                    Premium in-store PC recommendations, built for guided selling.
                   </h1>
                   <p className="max-w-2xl text-lg leading-8 text-slate-600">
-                    This frontend walks customers from open discovery to confident Mac selection through voice or typed input, adaptive questions, side-by-side comparison, and an assisted handoff.
+                    This frontend walks customers from open discovery to confident PC selection through voice or typed input, adaptive questions, side-by-side comparison, and an assisted handoff.
                   </p>
                 </div>
 

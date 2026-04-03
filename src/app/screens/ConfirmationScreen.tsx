@@ -103,7 +103,7 @@ export function ConfirmationScreen() {
             <div className="rounded-[28px] border border-slate-200 bg-white/85 p-5 text-sm leading-6 text-slate-600">
               <div className="font-semibold text-slate-900">What was captured in this frontend-only demo</div>
               <p className="mt-2">
-                Customer details, discovery input, adaptive answers, selected Macs, the in-store handoff, and the share-ready summary all stayed within mock React state only.
+                Customer details, discovery input, adaptive answers, selected PCs, the in-store handoff, and the share-ready summary all stayed within mock React state only.
               </p>
             </div>
 

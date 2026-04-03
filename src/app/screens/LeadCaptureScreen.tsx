@@ -109,7 +109,7 @@ export function LeadCaptureScreen() {
           </div>
           <div className="rounded-2xl border border-blue-100 bg-white/70 p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
-              Selected Mac
+              Selected PC
             </div>
             <div className="mt-2 text-sm font-medium text-blue-900">{activeProduct.model}</div>
           </div>
@@ -161,7 +161,7 @@ export function LeadCaptureScreen() {
                   A team member will be with you shortly
                 </h1>
                 <p className="mt-3 text-base leading-7 text-slate-600">
-                  The handoff now includes the selected Mac, customer details, and the journey highlights gathered during the session.
+                  The handoff now includes the selected PC, customer details, and the journey highlights gathered during the session.
                 </p>
               </div>
 
@@ -225,7 +225,7 @@ export function LeadCaptureScreen() {
               We&apos;re alerting a sales associate to help you
             </h1>
             <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-              Confirm the selected Mac, update the customer details if needed, and add any discussion note before sending the in-store alert.
+              Confirm the selected PC, update the customer details if needed, and add any discussion note before sending the in-store alert.
             </p>
           </div>
         </div>

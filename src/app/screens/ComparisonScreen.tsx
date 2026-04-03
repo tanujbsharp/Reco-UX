@@ -10,9 +10,9 @@ import { mockCommentary, mockProducts } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 
 const chipScoreMap: Record<string, number> = {
-  "Apple M3": 1,
-  "Apple M4": 2,
-  "Apple M4 Pro": 3,
+  "Zenith Core 7": 1,
+  "Zenith Core 9": 2,
+  "Zenith Core 9 Pro": 3,
 };
 
 function parseMetric(value: string) {
@@ -110,7 +110,7 @@ export function ComparisonScreen() {
                 Side-by-side compare
               </div>
               <div>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Compare your two shortlisted Macs</h1>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Compare your two shortlisted PCs</h1>
                 <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
                   This comparison is intentionally limited to two products so the implications stay clear instead of turning into an overloaded spec sheet.
                 </p>
@@ -244,7 +244,7 @@ export function ComparisonScreen() {
                     }}
                     className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
                   >
-                    Select this Mac
+                    Select this PC
                   </Button>
                 </div>
              </div>
@@ -280,7 +280,7 @@ export function ComparisonScreen() {
                     }}
                     className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
                   >
-                    Select this Mac
+                    Select this PC
                   </Button>
                 </div>
              </div>

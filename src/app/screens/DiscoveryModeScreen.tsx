@@ -47,7 +47,7 @@ export function DiscoveryModeScreen() {
           {[
             "Tell us what you need in voice or text",
             "Answer a few targeted follow-up questions",
-            "Receive AI-matched Mac recommendations",
+            "Receive AI-matched PC recommendations",
             "Compare your top two options side by side",
             "Connect with a store expert to wrap up",
           ].map((step, i) => (
@@ -74,7 +74,7 @@ export function DiscoveryModeScreen() {
           </li>
           <li className="flex items-start gap-3">
             <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-slate-500" />
-            <span><span className="font-semibold text-slate-700">Questions</span> — structured guided flow. Best for first-time Mac buyers who want step-by-step clarity.</span>
+            <span><span className="font-semibold text-slate-700">Questions</span> — structured guided flow. Best for first-time PC buyers who want step-by-step clarity.</span>
           </li>
         </ul>
       </div>
@@ -103,7 +103,7 @@ export function DiscoveryModeScreen() {
             Powered by AI
           </div>
           <h1 className="text-5xl font-semibold tracking-tight text-slate-950 md:text-6xl">
-            Find your perfect Mac
+            Find your perfect PC
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-8 text-slate-600">
             Tell us what you need in your own words. Our AI understands your requirements and surfaces the best options.
