@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -429,16 +429,17 @@ export function GuidedQuestionsScreen() {
       backHref={directGuidedEntry ? "/discover-mode" : "/voice-results"}
       backLabel={directGuidedEntry ? "Back to discovery mode" : "Back to summary"}
     >
-      <div className="mx-auto flex min-h-[72vh] max-w-4xl flex-col py-6 md:py-8">
-        <div className="mb-4 flex min-h-[48px] w-full justify-end">
-          <AnimatePresence>
-            {isLastQuestion && !nextDisabled && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 12 }}
-                transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
+      <div className="mx-auto max-w-4xl py-6 md:py-8">
+        <AnimatePresence>
+          {isLastQuestion && !nextDisabled && (
+            <motion.div
+              initial={{ opacity: 0, y: 12, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: 12, height: 0 }}
+              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="flex w-full justify-end overflow-hidden"
+            >
+              <div className="mb-4">
                 <Button
                   size="lg"
                   onClick={() => {
@@ -450,12 +451,12 @@ export function GuidedQuestionsScreen() {
                   See recommendations
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         
-        <div className="flex flex-1 flex-col">
+        <div>
           <AnimatePresence mode="wait">
             <motion.div
             key={currentQuestion.id}
