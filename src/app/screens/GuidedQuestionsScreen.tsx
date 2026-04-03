@@ -455,7 +455,7 @@ export function GuidedQuestionsScreen() {
           </AnimatePresence>
         </div>
         
-        <div className="flex flex-1 flex-col justify-center">
+        <div className="flex flex-1 flex-col">
           <AnimatePresence mode="wait">
             <motion.div
             key={currentQuestion.id}
