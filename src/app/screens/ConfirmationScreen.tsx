@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { CheckCircle2, Home, Share2 } from "lucide-react";
@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { mockProducts } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
+import { CometBorderCanvas } from "../components/CometBorderCanvas";
 
 export function ConfirmationScreen() {
   const navigate = useNavigate();
@@ -17,29 +18,17 @@ export function ConfirmationScreen() {
     selectedProducts,
     resetJourney,
   } = useJourney();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const sessionProducts = useMemo(() => {
-    const ids = new Set<string>();
+  const activeProducts = useMemo(() => {
     if (selectedProductId) {
-      ids.add(selectedProductId);
+      const product = mockProducts.find((p) => p.id === selectedProductId);
+      if (product) return [product];
     }
-    selectedProducts.forEach((id) => ids.add(id));
-    mockProducts.slice(0, 3).forEach((product) => {
-      if (ids.size < 3) {
-        ids.add(product.id);
-      }
-    });
-
-    const orderedIds = Array.from(ids).slice(0, 3);
-    const resolvedProducts = orderedIds.reduce<(typeof mockProducts)[number][]>((products, id) => {
-      const match = mockProducts.find((product) => product.id === id);
-      if (match) {
-        products.push(match);
-      }
-      return products;
-    }, []);
-
-    return resolvedProducts.length > 0 ? resolvedProducts : mockProducts.slice(0, 3);
+    if (selectedProducts.length > 0) {
+      return selectedProducts.map(id => mockProducts.find(p => p.id === id)).filter(Boolean) as typeof mockProducts;
+    }
+    return [mockProducts[0]];
   }, [selectedProductId, selectedProducts]);
 
   return (
@@ -47,10 +36,11 @@ export function ConfirmationScreen() {
       showCommentary={false}
       showTopBar={false}
       showStartOver={false}
+      transparentMain={true}
+      contentClassName="p-0 flex flex-col"
     >
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] max-w-5xl items-center justify-center py-8">
-        <GlowCard glowColor="green" customSize className="w-full rounded-[36px]">
-          <div className="space-y-8 p-8 text-center md:p-12">
+      <GlowCard glowColor="green" customSize className="flex h-full w-full flex-col justify-center rounded-[36px]">
+        <div className="space-y-8 p-8 text-center md:p-12">
             <motion.div
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -68,42 +58,49 @@ export function ConfirmationScreen() {
                   Thank you{customerInfo.name ? `, ${customerInfo.name}` : ""}!
                 </h1>
                 <p className="mx-auto mt-3 max-w-3xl text-base leading-7 text-slate-600">
-                  Your recommendations have been shared and the store team has the context they need to continue the conversation if required.
+                  {activeProducts.length > 1 ? "Your recommendations have" : "Your recommendation has"} been shared and the store team has the context they need to continue the conversation if required.
                 </p>
               </div>
             </motion.div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              {sessionProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/90 text-left shadow-[0_24px_70px_rgba(15,23,42,0.05)]"
+            <div className={`mx-auto grid gap-6 ${activeProducts.length > 1 ? "max-w-4xl grid-cols-1 md:grid-cols-2" : "max-w-md grid-cols-1"}`}>
+              {activeProducts.map((p, idx) => (
+                <motion.div 
+                  key={p.id} 
+                  onMouseEnter={() => setHoveredId(p.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative group cursor-pointer rounded-[28px] border border-slate-200 bg-white/90 text-left shadow-[0_24px_70px_rgba(15,23,42,0.05)] transition-shadow hover:border-slate-300 hover:bg-white hover:shadow-xl"
                 >
-                  <img
-                    src={product.image}
-                    alt={product.model}
-                    className="h-40 w-full object-cover"
-                  />
-                  <div className="space-y-3 p-5">
+                  <CometBorderCanvas isHovered={hoveredId === p.id} cometHue={idx === 0 ? 220 : 270} radius={28} />
+                  <div className="relative z-10 w-full overflow-hidden rounded-t-[28px]">
+                    <img
+                      src={p.image}
+                      alt={p.model}
+                      className="aspect-video w-full object-cover"
+                    />
+                  </div>
+                  <div className="relative z-10 space-y-3 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        {product.family}
+                        {p.family}
                       </div>
                       <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">
-                        {product.matchScore}% match
+                        {p.matchScore}% match
                       </Badge>
                     </div>
-                    <div className="text-lg font-semibold text-slate-950">{product.model}</div>
-                    <div className="text-sm leading-6 text-slate-600">{product.bestFor}</div>
+                    <div className="text-lg font-semibold text-slate-950">{p.model}</div>
+                    <div className="text-sm leading-6 text-slate-600">{p.bestFor}</div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
 
             <div className="rounded-[28px] border border-slate-200 bg-white/85 p-5 text-sm leading-6 text-slate-600">
-              <div className="font-semibold text-slate-900">What was captured in this frontend-only demo</div>
+              <div className="font-semibold text-slate-900">What was captured in this session</div>
               <p className="mt-2">
-                Customer details, discovery input, adaptive answers, selected PCs, the in-store handoff, and the share-ready summary all stayed within mock React state only.
+                Your contact details, discovery input, adaptive answers, {activeProducts.length > 1 ? "selected PCs" : "selected PC"}, and the share-ready summary have been sent to the store staff.
               </p>
             </div>
 
@@ -131,7 +128,6 @@ export function ConfirmationScreen() {
             <div className="text-sm text-slate-400">Bsharp Reco</div>
           </div>
         </GlowCard>
-      </div>
     </TwoZoneLayout>
   );
 }

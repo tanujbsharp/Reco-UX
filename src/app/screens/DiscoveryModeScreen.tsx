@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowRight, Keyboard, ListChecks, Mic } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
+import { GlowCard } from "../components/GlowCard";
 import { useJourney } from "../context/JourneyContext";
 import { WorkflowBuilderCard } from "../components/ui/workflow-builder-card";
 
@@ -60,24 +61,6 @@ export function DiscoveryModeScreen() {
           ))}
         </ol>
       </div>
-
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Which mode to pick?</h4>
-        <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-600">
-          <li className="flex items-start gap-3">
-            <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-[#2563eb]" />
-            <span><span className="font-semibold text-[#2563eb]">Voice</span> — fastest when the customer already knows what they want. Supports Hindi and English naturally.</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-teal-600" />
-            <span><span className="font-semibold text-teal-700">Type</span> — ideal for quiet showrooms, kiosks, or customers who prefer a keyboard to voice.</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-slate-500" />
-            <span><span className="font-semibold text-slate-700">Questions</span> — structured guided flow. Best for first-time PC buyers who want step-by-step clarity.</span>
-          </li>
-        </ul>
-      </div>
     </div>
   );
 
@@ -90,9 +73,12 @@ export function DiscoveryModeScreen() {
       progressTotal={8}
       stepLabel="Step 2 of 8"
       backHref="/consent"
-      backLabel="Back to customer details"
+      backLabel="Back"
+      transparentMain={true}
+      contentClassName="p-0 flex flex-col"
     >
-      <div className="mx-auto max-w-4xl py-8 md:py-10">
+      <GlowCard glowColor="blue" customSize className="flex h-full w-full flex-col overflow-hidden rounded-[34px]">
+        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto p-8 md:p-12">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -110,7 +96,7 @@ export function DiscoveryModeScreen() {
           </p>
         </motion.div>
 
-        <div className="grid gap-4 lg:grid-cols-3 items-start">
+        <div className="grid gap-4 lg:grid-cols-3 items-start w-full max-w-5xl">
           {/* ── Voice card ── */}
           <motion.div
             custom={0.15}
@@ -189,7 +175,8 @@ export function DiscoveryModeScreen() {
             />
           </motion.div>
         </div>
-      </div>
+        </div>
+      </GlowCard>
     </TwoZoneLayout>
   );
 }

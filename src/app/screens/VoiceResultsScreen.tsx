@@ -51,7 +51,7 @@ export function VoiceResultsScreen() {
       <div className="rounded-3xl border border-blue-100 bg-blue-50/50 p-5">
         <h3 className="text-lg font-bold tracking-tight text-slate-950">Full transcription</h3>
         <p className="mt-3 text-sm leading-6 text-slate-600">{mockCommentary.voiceResults}</p>
-        <div className="mt-4 rounded-2xl border border-blue-100 bg-white/70 p-4 text-sm leading-7 text-slate-700">
+        <div className="mt-4 rounded-2xl border border-blue-100 bg-white/70 p-4 text-sm leading-7 text-slate-700 break-words whitespace-pre-wrap">
           {discoveryText || "Your discovery input will appear here."}
         </div>
       </div>
@@ -59,7 +59,7 @@ export function VoiceResultsScreen() {
       <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5">
         <h3 className="text-lg font-bold tracking-tight text-slate-950">What happens next?</h3>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          These tags will pre-select relevant answers in the next step, but the customer can override any of them before the recommendations are generated.
+          These tags will pre-select relevant answers in the next step, but you can override any of them before the recommendations are generated.
         </p>
       </div>
     </div>
@@ -74,11 +74,13 @@ export function VoiceResultsScreen() {
       progressTotal={8}
       stepLabel="Step 2 of 8"
       backHref="/voice-discovery"
-      backLabel="Back to discovery"
+      backLabel="Back"
+      transparentMain={true}
     >
-      <div className="mx-auto max-w-4xl py-6 md:py-8">
-        <div className="space-y-6">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 text-center">
+      <div className="mx-auto max-w-4xl flex flex-col min-h-full">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-8 md:p-12 space-y-12">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 text-center">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
               <CheckCheck className="h-3.5 w-3.5" />
               {discoveryMode === "voice" ? "Voice understood" : "Typed note understood"}
@@ -91,8 +93,7 @@ export function VoiceResultsScreen() {
             </div>
           </motion.div>
 
-          <GlowCard glowColor="green" customSize className="rounded-[30px]">
-            <div className="space-y-6 p-6 md:p-8">
+          <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold text-slate-950">Detected preferences</h2>
@@ -218,8 +219,8 @@ export function VoiceResultsScreen() {
                 </Button>
               </div>
             </div>
-          </GlowCard>
-        </div>
+          </div>
+        </GlowCard>
       </div>
     </TwoZoneLayout>
   );

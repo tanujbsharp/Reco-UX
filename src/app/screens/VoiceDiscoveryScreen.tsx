@@ -9,6 +9,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Badge } from "../components/ui/badge";
 import { mockCommentary, mockVoiceTranscriptions } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
+import { cn } from "../components/ui/utils";
 
 type DiscoveryState = "idle" | "recording" | "processing";
 
@@ -119,19 +120,6 @@ export function VoiceDiscoveryScreen() {
 
   const commentary = (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#2563eb]/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
-          <Volume2 className="h-3.5 w-3.5" />
-          {state === "recording" ? "Listening..." : discoveryMode === "voice" ? "Voice discovery" : "Typed discovery"}
-        </div>
-        <p className="text-sm leading-6 text-slate-600">
-          {state === "idle" && discoveryMode === "voice" && mockCommentary.voiceIdle}
-          {state === "idle" && discoveryMode === "text" && "Type naturally in any language. Describe the workflow, portability needs, battery expectations, or anything else that should shape the PC shortlist."}
-          {state === "recording" && mockCommentary.voiceRecording}
-          {state === "processing" && mockCommentary.voiceProcessing}
-        </p>
-      </div>
-
       <AnimatePresence initial={false}>
         {(discoveryMode === "voice" && (transcription || state === "recording")) && (
           <motion.div
@@ -153,7 +141,7 @@ export function VoiceDiscoveryScreen() {
                 <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">{formatDuration(elapsedSeconds)}</Badge>
               )}
             </div>
-            <div className="mt-4 max-h-48 overflow-auto rounded-2xl border border-blue-100 bg-white/70 p-4 text-sm leading-7 text-slate-700">
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-white/70 p-4 text-sm leading-7 text-slate-700 break-words whitespace-pre-wrap">
               {transcription || "Waiting for the first spoken words..."}
               {state === "recording" && (
                 <motion.span
@@ -183,32 +171,30 @@ export function VoiceDiscoveryScreen() {
     <TwoZoneLayout
       commentary={commentary}
       commentaryTitle="Open discovery"
-      commentarySubtitle="Real-time capture from voice or typed intent"
+      commentarySubtitle="Say what you need in your own words—out loud or by typing."
       progressStep={2}
       progressTotal={8}
       stepLabel="Step 2 of 8"
       backHref="/discover-mode"
       backLabel="Back to discovery mode"
+      transparentMain={true}
     >
-      <div className="mx-auto flex min-h-[72vh] max-w-4xl items-center justify-center py-6 md:py-8">
-        <GlowCard glowColor="blue" customSize className="w-full rounded-[34px]">
-          <div className="space-y-8 p-6 md:p-8">
+      <div className="mx-auto max-w-4xl flex flex-col min-h-full">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-8 md:p-12 flex flex-col justify-center min-h-full">
             <div className="space-y-4 text-center">
-              <div className="inline-flex items-center gap-2 rounded-full bg-[#2563eb]/8 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">
-                <Sparkles className="h-3.5 w-3.5" />
-                Bsharp discovery
-              </div>
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">
                   Tell us what you&apos;re looking for
                 </h1>
                 <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-                  Speak naturally in any language or type out the need. We&apos;ll extract the important buying signals and use them to shape the PC shortlist.
+                  Speak naturally or type your need. We&apos;ll extract the key signals to shape your PC shortlist.
                 </p>
               </div>
             </div>
 
-            <div className="mx-auto inline-flex w-[240px] rounded-full border border-slate-200 bg-white/90 p-1">
+            <div className="mx-auto mt-6 flex w-full justify-center">
+              <div className="inline-flex w-[240px] flex-shrink-0 rounded-full border border-slate-200 bg-white/90 p-1">
               <button
                 type="button"
                 onClick={() => {
@@ -241,11 +227,12 @@ export function VoiceDiscoveryScreen() {
                   Text
                 </span>
               </button>
+              </div>
             </div>
 
             {discoveryMode === "voice" ? (
-              <div className="space-y-8">
-                <div className="relative flex flex-col items-center justify-center py-6">
+              <div className="flex flex-col items-center justify-center gap-8 py-10">
+                <div className="relative flex flex-col items-center justify-center">
                   <motion.div
                     animate={
                       state === "recording"
@@ -288,7 +275,7 @@ export function VoiceDiscoveryScreen() {
                   <div className="mt-6 text-center">
                     <div className="text-lg font-semibold text-slate-900">
                       {state === "idle" && "Tap to start speaking"}
-                      {state === "recording" && "Listening to the customer..."}
+                      {state === "recording" && "Listening to you..."}
                       {state === "processing" && "Turning speech into recommendation signals..."}
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
@@ -298,7 +285,7 @@ export function VoiceDiscoveryScreen() {
                     </div>
                   </div>
 
-                  {state === "recording" ? (
+                  {state === "recording" && (
                     <div className="mt-8 flex h-[44px] items-end gap-1">
                       {[18, 28, 44, 30, 22].map((height, index) => (
                         <motion.div
@@ -313,8 +300,6 @@ export function VoiceDiscoveryScreen() {
                         />
                       ))}
                     </div>
-                  ) : (
-                    <div className="mt-8 h-[44px]" />
                   )}
                 </div>
 
@@ -332,22 +317,17 @@ export function VoiceDiscoveryScreen() {
                   >
                     {state === "recording" ? "Done recording" : "Start voice capture"}
                   </Button>
-                  <p className="text-sm text-slate-500 min-h-[20px]">
-                    {state === "idle" && "Multilingual input works best when the customer speaks naturally."}
-                  </p>
                 </div>
               </div>
             ) : (
-              <div className="mx-auto max-w-3xl space-y-5">
-                <div className="rounded-[28px] border border-slate-200 bg-white/90 p-4">
-                  <Textarea
-                    value={textInput}
-                    onChange={(event) => setTextInput(event.target.value)}
-                    placeholder="Example: I need a PCBook for daily travel, coding, and some light design work. Battery life matters a lot, and I am deciding between an Air and a 14-inch Pro."
-                    className="min-h-[220px] rounded-[22px] border-slate-200 bg-slate-50 p-5 text-base leading-7"
-                    disabled={state === "processing"}
-                  />
-                </div>
+              <div className="mt-8 w-full space-y-5 md:mt-12">
+                <Textarea
+                  value={textInput}
+                  onChange={(event) => setTextInput(event.target.value)}
+                  placeholder="Example: I need a PCBook for daily travel, coding, and some light design work. Battery life matters a lot, and I am deciding between an Air and a 14-inch Pro."
+                  className="min-h-[240px] w-full rounded-[28px] border-transparent bg-black/5 p-6 text-base leading-7 shadow-none focus-visible:border-slate-200 focus-visible:bg-white focus-visible:ring-1"
+                  disabled={state === "processing"}
+                />
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm leading-6 text-slate-500">
                     Typed input follows the same flow: we extract the details first, then move into confirmation and adaptive questions.

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { ArrowRight, LockKeyhole, Store } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
+import { BrandMark } from "../components/BrandMark";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -25,11 +26,11 @@ export function LandingScreen() {
             <div className="flex h-full flex-col justify-between gap-10 p-8 md:p-10">
               <div className="space-y-8">
                 <div className="inline-flex items-center gap-3 rounded-full border border-white/80 bg-white/85 px-4 py-2 shadow-sm">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#2563eb] text-sm font-semibold text-white">
-                    B#
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+                    <BrandMark className="h-full w-full max-h-12 max-w-12 object-contain drop-shadow-[0_1px_3px_rgba(15,23,42,0.12)]" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Bsharp Reco</div>
+                    <div className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-800">Bsharp Reco</div>
                     <div className="text-sm font-medium text-slate-700">Retail recommendation suite</div>
                   </div>
                 </div>
@@ -42,7 +43,7 @@ export function LandingScreen() {
                     Premium in-store PC recommendations, built for guided selling.
                   </h1>
                   <p className="max-w-2xl text-lg leading-8 text-slate-600">
-                    This frontend walks customers from open discovery to confident PC selection through voice or typed input, adaptive questions, side-by-side comparison, and an assisted handoff.
+                    This experience walks you from open discovery to confident PC selection through voice or typed input, adaptive questions, side-by-side comparison, and an assisted handoff.
                   </p>
                 </div>
 
@@ -61,9 +62,9 @@ export function LandingScreen() {
                     <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563eb]/10">
                       <LockKeyhole className="h-6 w-6 text-[#2563eb]" />
                     </div>
-                    <h2 className="text-lg font-semibold text-slate-900">Frontend-only mock</h2>
+                    <h2 className="text-lg font-semibold text-slate-900">Secure session</h2>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
-                      No backend calls, no real auth, just a polished demo flow using mock data and realistic UI states.
+                      All recommendations and customer data are securely processed and cleared between sessions.
                     </p>
                   </div>
                 </div>
@@ -87,7 +88,7 @@ export function LandingScreen() {
                 </div>
                 <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Log in to begin a new session</h2>
                 <p className="text-base leading-7 text-slate-600">
-                  Use any mock credentials here. The button simply advances into the guided retail journey.
+                  Enter your store credentials to begin assisting a new customer.
                 </p>
               </div>
 

@@ -464,7 +464,7 @@ export const mockProducts: Product[] = [
       "Best value only if the screen size is truly important",
     ],
     implications: [
-      "Recommend this when the customer prioritizes workspace and performance over mobility.",
+      "Recommend this when you prioritize workspace and performance over mobility.",
       "A strong in-store upsell if they already know they dislike compact laptops.",
     ],
     accessories: ["Thunderbolt dock", "Magic Keyboard with Touch ID", "External SSD"],
@@ -705,7 +705,7 @@ export const mockCommentary = {
   questions: {
     q1: "Usage tells us whether to lean toward the silent Air family or the more capable Pro range.",
     q2: "Portability quickly separates the best everyday carry options from the desk-first Pro choices.",
-    q3: "Screen size often decides whether a customer prefers comfort, power, or travel-friendliness.",
+    q3: "Screen size often decides whether you prefer comfort, power, or travel-friendliness.",
     q4: "This helps us pick the right compromise between battery, power, ports, and display quality.",
     q5: "These final priorities shape the order of recommendations and the trade-offs we call out.",
   },
@@ -716,9 +716,9 @@ export const mockCommentary = {
   comparison:
     "Comparing two PCs side by side makes the trade-offs concrete: carry weight versus screen size, silent design versus thermal headroom, and value versus future-proofing.",
   productDetail:
-    "The full spec view, gallery, and fit summary are here to help the customer feel confident in their choice. Use the talking points below to frame the value clearly.",
+    "The full spec view, gallery, and fit summary are here to help you feel confident in your choice. Use the talking points below to frame the value clearly.",
   handoff:
-    "The handoff stays lightweight: selected product, customer details, and the key requirements gathered in the journey.",
+    "The handoff stays lightweight: selected product, your details, and the key requirements gathered in the journey.",
   share:
-    "Share keeps the message simple and polished: what was recommended, why it fits, and how the customer can continue the conversation.",
+    "Share keeps the message simple and polished: what was recommended, why it fits, and how you can continue the conversation.",
 };

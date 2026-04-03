@@ -48,7 +48,7 @@ export function ProductDetailScreen() {
             <div className="space-y-4 p-8 text-center">
               <h1 className="text-3xl font-semibold text-slate-950">Product not found</h1>
               <p className="text-base leading-7 text-slate-600">
-                This PC detail view isn&apos;t available in the mock catalog anymore.
+                This PC detail view isn&apos;t available in the catalog anymore.
               </p>
               <Button
                 onClick={() => navigate("/recommendations")}
@@ -101,7 +101,7 @@ export function ProductDetailScreen() {
       </div>
 
       <div className="rounded-3xl border border-purple-200/70 bg-purple-50/60 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-purple-700">Customer priorities</h4>
+        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-purple-700">Your priorities</h4>
         <div className="mt-3 flex flex-wrap gap-2">
           {voiceTags.length > 0 ? (
             voiceTags.map((tag) => (
@@ -146,10 +146,11 @@ export function ProductDetailScreen() {
       stepLabel="Step 6 of 8"
       backHref="/recommendations"
       backLabel="Back to recommendations"
+      transparentMain={true}
     >
-      <div className="mx-auto max-w-6xl space-y-6 py-6 md:py-8">
-        <GlowCard glowColor="blue" customSize className="rounded-[34px]">
-          <div className="space-y-6 p-6 md:p-8">
+      <div className="mx-auto max-w-6xl w-full min-h-full flex flex-col">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-6 md:p-8 space-y-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -286,11 +287,8 @@ export function ProductDetailScreen() {
                 </motion.div>
               </div>
             </div>
-          </div>
-        </GlowCard>
 
-        <GlowCard glowColor="purple" customSize className="rounded-[34px]">
-          <div className="p-6 md:p-8">
+          <div className="pt-2">
             <Tabs defaultValue="overview" className="space-y-6">
               <TabsList className="flex h-auto w-full flex-wrap gap-2 rounded-[22px] bg-slate-100 p-2">
                 <TabsTrigger value="overview" className="rounded-[18px] px-4 py-2">
@@ -403,7 +401,7 @@ export function ProductDetailScreen() {
                     ))}
                   </div>
                   <div className="mt-4 rounded-[22px] bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    Video support can be added later. For now, this mock highlights the gallery-first product storytelling.
+                    Video support can be added later. For now, explore the full visual gallery of this product.
                   </div>
                 </div>
               </TabsContent>
@@ -460,44 +458,45 @@ export function ProductDetailScreen() {
               </TabsContent>
             </Tabs>
           </div>
-        </GlowCard>
 
-        <div className="sticky bottom-4 z-20 rounded-[28px] border border-white/80 bg-white/88 p-4 shadow-[0_30px_90px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="text-sm leading-6 text-slate-600">
-              {compareLocked
-                ? "Two PCs are already in the comparison tray. Remove one to shortlist this model too."
-                : "Use this sticky bar to move from detail into shortlist or the store handoff."}
-            </div>
+          <div className="mt-8 rounded-[28px] border border-slate-200 bg-white/60 p-4 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="text-sm leading-6 text-slate-600">
+                {compareLocked
+                  ? "Two PCs are already in the comparison tray. Remove one to shortlist this model too."
+                  : "Use this action bar to move from detail into shortlist or the store handoff."}
+              </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                onClick={() => {
-                  setSelectedProductId(product.id);
-                  navigate("/handoff");
-                }}
-                className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
-              >
-                Contact store staff
-              </Button>
-              <Button
-                variant={isSelected ? "secondary" : "outline"}
-                disabled={compareLocked}
-                onClick={() => toggleProductSelection(product.id)}
-                className="rounded-full border-slate-200 bg-white"
-              >
-                {isSelected ? "Added to shortlist" : "Add to shortlist"}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/recommendations")}
-                className="rounded-full"
-              >
-                Back to recommendations
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  onClick={() => {
+                    setSelectedProductId(product.id);
+                    navigate("/handoff");
+                  }}
+                  className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
+                >
+                  Contact store staff
+                </Button>
+                <Button
+                  variant={isSelected ? "secondary" : "outline"}
+                  disabled={compareLocked}
+                  onClick={() => toggleProductSelection(product.id)}
+                  className="rounded-full border-slate-200 bg-white"
+                >
+                  {isSelected ? "Added to shortlist" : "Add to shortlist"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate("/recommendations")}
+                  className="rounded-full"
+                >
+                  Back to recommendations
+                </Button>
+              </div>
             </div>
           </div>
         </div>
+        </GlowCard>
       </div>
     </TwoZoneLayout>
   );

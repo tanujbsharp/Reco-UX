@@ -10,6 +10,7 @@ import { useJourney } from "../context/JourneyContext";
 import { getTagColor } from "../utils/tagColors";
 import { ExpandableCommentaryCard } from "../components/ExpandableCommentaryCard";
 import { cn } from "../components/ui/utils";
+import { CometBorderCanvas } from "../components/CometBorderCanvas";
 
 const rankConfig = [
   { label: "Best Match", badgeClass: "bg-emerald-500 text-white", barClass: "from-emerald-400 to-emerald-600", ringClass: "ring-emerald-200" },
@@ -25,184 +26,6 @@ const COMET_COLORS_BY_RANK = [
   { hue: 330, sat: 100, lumBase: 60 }, // Rank 2: pink
   { hue: 168, sat: 58, lumBase: 28 }, // Rank 3: darker jade
 ];
-
-// ─── Perimeter walker ──────────────────────────────────────────────────────
-/**
- * Returns [x, y] for distance `d` along a rounded-rectangle perimeter
- * (corner radius R). Starts at top-left corner, travels clockwise.
- * Uses the ACTUAL arc length for corners so speed is constant everywhere.
- * `inset` shifts the path inwards (e.g. inset=1 for a 2px stroke so it fits perfectly).
- */
-function perimeterPoint(d: number, W: number, H: number, R: number, inset: number = 1): [number, number] {
-  const w = Math.max(0, W - 2 * inset);
-  const h = Math.max(0, H - 2 * inset);
-  const r = Math.max(0, R - inset);
-
-  const sw = Math.max(w - 2 * r, 0);   // straight horizontal
-  const sh = Math.max(h - 2 * r, 0);   // straight vertical
-  const arc = (Math.PI / 2) * r;        // quarter-circle arc length
-  const total = 2 * (sw + sh) + 4 * arc;
-  let p = ((d % total) + total) % total;
-
-  let x = 0, y = 0;
-  if (p < sw) { x = r + p; y = 0; }
-  else {
-    p -= sw;
-    if (p < arc) { const a = -Math.PI/2 + (p/arc)*Math.PI/2; x = w-r+Math.cos(a)*r; y = r+Math.sin(a)*r; }
-    else {
-      p -= arc;
-      if (p < sh) { x = w; y = r + p; }
-      else {
-        p -= sh;
-        if (p < arc) { const a = 0 + (p/arc)*Math.PI/2; x = w-r+Math.cos(a)*r; y = h-r+Math.sin(a)*r; }
-        else {
-          p -= arc;
-          if (p < sw) { x = w - r - p; y = h; }
-          else {
-            p -= sw;
-            if (p < arc) { const a = Math.PI/2 + (p/arc)*Math.PI/2; x = r+Math.cos(a)*r; y = h-r+Math.sin(a)*r; }
-            else {
-              p -= arc;
-              if (p < sh) { x = 0; y = h - r - p; }
-              else {
-                p -= sh;
-                const a = Math.PI + (p/arc)*Math.PI/2; x = r + Math.cos(a)*r; y = r + Math.sin(a)*r;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return [x + inset, y + inset];
-}
-
-// ─── CometBorderCanvas ────────────────────────────────────────────────────
-/**
- * Draws a glowing comet that orbits the card border at constant physical speed.
- * Uses a <canvas> so every pixel of every edge (including corners) is visited
- * evenly — no angular compression issues.
- *
- * Colour is fixed per card: hsl(hue, sat%, lightness%) from props.
- */
-function CometBorderCanvas({
-  isHovered,
-  cometHue,
-  cometSat = 100,
-  cometLumBase = 60,
-  speedPx = 400,
-  tailPx  = 250,
-  radius  = 24,
-}: {
-  isHovered: boolean;
-  cometHue:   number;
-  cometSat?: number;
-  cometLumBase?: number;
-  speedPx?:  number;
-  tailPx?:   number;
-  radius?:   number;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const progressRef  = useRef(0);
-  const rafRef       = useRef<number>(0);
-  const lastTsRef    = useRef<number | null>(null);
-  const activeRef    = useRef(false);
-
-  useEffect(() => {
-    activeRef.current = isHovered;
-    const canvas    = canvasRef.current;
-    const container = containerRef.current;
-
-    if (!isHovered) {
-      cancelAnimationFrame(rafRef.current);
-      lastTsRef.current = null;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      return;
-    }
-    if (!canvas || !container) return;
-
-    const tick = (ts: number) => {
-      if (!activeRef.current) return;
-      if (lastTsRef.current === null) lastTsRef.current = ts;
-      const dt = Math.min(ts - lastTsRef.current, 50);
-      lastTsRef.current = ts;
-
-      const W = container.offsetWidth;
-      const H = container.offsetHeight;
-      const R = radius;
-      if (canvas.width !== W)  canvas.width  = W;
-      if (canvas.height !== H) canvas.height = H;
-
-      // Perimeter length for this rounded rect
-      const sw  = Math.max(W - 2*R, 0);
-      const sh  = Math.max(H - 2*R, 0);
-      const peri = 2*(sw + sh) + 4*(Math.PI/2)*R;
-
-      progressRef.current = (progressRef.current + speedPx * dt / 1000) % peri;
-
-      // Fixed hue for the comet
-      const hue = cometHue;
-
-      const ctx = canvas.getContext("2d")!;
-      ctx.clearRect(0, 0, W, H);
-
-      // ── Draw crisp 2px line tail ──────────────────────────────────────
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-
-      // Draw in short segments from tail to head
-      const STEPS = Math.max(10, Math.floor(tailPx / 2));
-      for (let i = 0; i < STEPS; i++) {
-        const t = i / STEPS; // 0 = tail, 1 = head
-        const d1 = progressRef.current - tailPx * (1 - t);
-        const d2 = progressRef.current - tailPx * (1 - (i + 1) / STEPS);
-        
-        // inset=1 places the 2px stroke exactly within the element's bounding box
-        const [x1, y1] = perimeterPoint(d1, W, H, R, 1);
-        const [x2, y2] = perimeterPoint(d2, W, H, R, 1);
-
-        const alpha = Math.pow(t, 2) * 0.95;
-        const lum = cometLumBase + t * 25; // Base lightness to base+25 lightness
-        
-        ctx.strokeStyle = `hsl(${hue} ${cometSat}% ${lum}% / ${alpha})`;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-
-      // ── Head: tiny bright tip ──────────────────────────────────────
-      const [hx, hy] = perimeterPoint(progressRef.current, W, H, R, 1);
-      ctx.fillStyle = `hsl(${hue} ${cometSat}% ${Math.min(cometLumBase + 35, 92)}% / 1)`;
-      ctx.beginPath();
-      ctx.arc(hx, hy, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(rafRef.current); activeRef.current = false; };
-  }, [isHovered, cometHue, cometSat, cometLumBase, speedPx, tailPx, radius]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="pointer-events-none absolute inset-0 transition-opacity duration-300"
-      style={{ zIndex: 3, borderRadius: radius, opacity: isHovered ? 1 : 0 }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{ position: "absolute", inset: 0, borderRadius: radius }}
-      />
-    </div>
-  );
-}
 
 function matchScoreColor(score: number) {
   if (score >= 90) return "text-emerald-600";
@@ -305,7 +128,7 @@ export function RecommendationsScreen() {
       backHref="/questions"
       backLabel="Back to questions"
     >
-      <div className="mx-auto max-w-4xl py-6 md:py-8">
+      <div className="mx-auto max-w-4xl">
         <div className="space-y-6">
           <motion.div
             initial={{ opacity: 0, y: 12 }}

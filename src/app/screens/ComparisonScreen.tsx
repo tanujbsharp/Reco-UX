@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowRight, Check, HelpCircle, Scale } from "lucide-react";
 import { motion } from "motion/react";
@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { mockCommentary, mockProducts } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
+import { CometBorderCanvas } from "../components/CometBorderCanvas";
 
 const chipScoreMap: Record<string, number> = {
   "Zenith Core 7": 1,
@@ -23,6 +24,7 @@ function parseMetric(value: string) {
 export function ComparisonScreen() {
   const navigate = useNavigate();
   const { selectedProducts, clearSelectedProducts, setSelectedProductId } = useJourney();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const productsToCompare = useMemo(() => mockProducts.filter((product) => selectedProducts.includes(product.id)), [selectedProducts]);
 
@@ -76,7 +78,7 @@ export function ComparisonScreen() {
         <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
             <div className="font-semibold">{betterCarryProduct.model} is easier to live with daily.</div>
-            <p className="mt-1 text-emerald-800">It is the lighter carry, so it wins if the customer moves around often or works away from a desk.</p>
+            <p className="mt-1 text-emerald-800">It is the lighter carry, so it wins if you move around often or work away from a desk.</p>
           </div>
           <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-900">
             <div className="font-semibold">{betterPowerProduct.model} gives more long-term headroom.</div>
@@ -84,7 +86,7 @@ export function ComparisonScreen() {
           </div>
           <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-purple-900">
             <div className="font-semibold">Our lean recommendation: {betterPowerProduct.model}</div>
-            <p className="mt-1 text-purple-800">Choose it if the customer values flexibility and fewer future compromises. Pick {betterCarryProduct.model} if effortless carry matters more.</p>
+            <p className="mt-1 text-purple-800">Choose it if you value flexibility and fewer future compromises. Pick {betterCarryProduct.model} if effortless carry matters more.</p>
           </div>
         </div>
       </div>
@@ -101,9 +103,11 @@ export function ComparisonScreen() {
       stepLabel="Step 6 of 8"
       backHref="/recommendations"
       backLabel="Back to recommendations"
+      transparentMain={true}
     >
-      <div className="mx-auto max-w-7xl py-6 md:py-8">
-        <div className="space-y-10">
+      <div className="mx-auto max-w-7xl flex flex-col min-h-full">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-8 md:p-12 space-y-10">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-3">
               <div className="inline-flex items-center rounded-full bg-[#2563eb]/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">
@@ -128,8 +132,15 @@ export function ComparisonScreen() {
 
           <div className="grid gap-6 md:grid-cols-[1fr_auto_1fr] items-start">
             {/* Left Product Header */}
-            <GlowCard glowColor={leftProduct.id === betterPowerProduct.id ? "blue" : "purple"} customSize className="rounded-[30px]">
-              <div className="space-y-5 p-5">
+            <motion.div 
+              onMouseEnter={() => setHoveredId(leftProduct.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.3 }}
+              className={`relative rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${leftProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
+            >
+              <CometBorderCanvas isHovered={hoveredId === leftProduct.id} cometHue={leftProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
+              <div className="relative z-10 space-y-5">
                 <img src={leftProduct.image} alt={leftProduct.model} className="h-52 w-full rounded-[24px] object-cover" />
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{leftProduct.family}</div>
@@ -147,14 +158,21 @@ export function ComparisonScreen() {
                   <p className="mt-2 text-sm leading-6 text-slate-600">{leftProduct.fitSummary}</p>
                 </div>
               </div>
-            </GlowCard>
+            </motion.div>
 
             {/* Spacer for middle column in grid */}
             <div className="hidden md:block w-32"></div>
 
             {/* Right Product Header */}
-            <GlowCard glowColor={rightProduct.id === betterPowerProduct.id ? "blue" : "purple"} customSize className="rounded-[30px]">
-              <div className="space-y-5 p-5">
+            <motion.div 
+              onMouseEnter={() => setHoveredId(rightProduct.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.3 }}
+              className={`relative rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${rightProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
+            >
+              <CometBorderCanvas isHovered={hoveredId === rightProduct.id} cometHue={rightProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
+              <div className="relative z-10 space-y-5">
                 <img src={rightProduct.image} alt={rightProduct.model} className="h-52 w-full rounded-[24px] object-cover" />
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{rightProduct.family}</div>
@@ -172,7 +190,7 @@ export function ComparisonScreen() {
                   <p className="mt-2 text-sm leading-6 text-slate-600">{rightProduct.fitSummary}</p>
                 </div>
               </div>
-            </GlowCard>
+            </motion.div>
           </div>
 
           {/* Unified Comparison Table with Labels Down the Middle */}
@@ -297,7 +315,10 @@ export function ComparisonScreen() {
             </Button>
             <Button
               size="lg"
-              onClick={() => navigate("/handoff")}
+              onClick={() => {
+                setSelectedProductId(null);
+                navigate("/handoff");
+              }}
               className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
             >
               <HelpCircle className="h-4 w-4" />
@@ -306,6 +327,7 @@ export function ComparisonScreen() {
             </Button>
           </div>
         </div>
+        </GlowCard>
       </div>
     </TwoZoneLayout>
   );

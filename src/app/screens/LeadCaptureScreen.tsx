@@ -9,6 +9,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
@@ -18,6 +19,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Badge } from "../components/ui/badge";
 import { mockCommentary, mockProducts, mockQuestions } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
+import { CometBorderCanvas } from "../components/CometBorderCanvas";
 
 export function LeadCaptureScreen() {
   const navigate = useNavigate();
@@ -35,11 +37,20 @@ export function LeadCaptureScreen() {
   const [alertSent, setAlertSent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState(customerInfo);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const activeProduct = useMemo(() => {
-    const preferredId = selectedProductId ?? selectedProducts[0] ?? mockProducts[0].id;
-    return mockProducts.find((product) => product.id === preferredId) ?? mockProducts[0];
+  const activeProducts = useMemo(() => {
+    if (selectedProductId) {
+      const product = mockProducts.find((p) => p.id === selectedProductId);
+      if (product) return [product];
+    }
+    if (selectedProducts.length > 0) {
+      return selectedProducts.map(id => mockProducts.find(p => p.id === id)).filter(Boolean) as typeof mockProducts;
+    }
+    return [mockProducts[0]];
   }, [selectedProductId, selectedProducts]);
+
+  const primaryProduct = activeProducts[0];
 
   const journeyHighlights = useMemo(() => {
     const answerHighlights = answers.slice(0, 4).map((answer) => {
@@ -89,19 +100,12 @@ export function LeadCaptureScreen() {
 
   const commentary = (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
-          Salesperson preview
-        </h4>
-        <p className="mt-3 text-sm leading-6 text-slate-600">{mockCommentary.handoff}</p>
-      </div>
-
       <div className="rounded-3xl border border-blue-200 bg-blue-50/50 p-5">
-        <h4 className="text-sm font-semibold text-blue-950">Customer snapshot</h4>
+        <h4 className="text-sm font-semibold text-blue-950">Your snapshot</h4>
         <div className="mt-4 space-y-3">
           <div className="rounded-2xl border border-blue-100 bg-white/70 p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
-              Customer
+              You
             </div>
             <div className="mt-2 text-sm font-medium text-blue-900">
               {formData.name || "Name pending"} • {formData.phone || "Phone pending"}
@@ -109,9 +113,9 @@ export function LeadCaptureScreen() {
           </div>
           <div className="rounded-2xl border border-blue-100 bg-white/70 p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
-              Selected PC
+              {activeProducts.length > 1 ? "Selected PCs" : "Selected PC"}
             </div>
-            <div className="mt-2 text-sm font-medium text-blue-900">{activeProduct.model}</div>
+            <div className="mt-2 text-sm font-medium text-blue-900">{activeProducts.map(p => p.model).join(" & ")}</div>
           </div>
         </div>
       </div>
@@ -143,16 +147,17 @@ export function LeadCaptureScreen() {
       <TwoZoneLayout
         commentary={commentary}
         commentaryTitle="Sales handoff sent"
-        commentarySubtitle="The store team now has the customer context"
+        commentarySubtitle="The store team now has your context"
         progressStep={7}
         progressTotal={8}
         stepLabel="Step 7 of 8"
-        backHref={selectedProducts.length === 2 ? "/comparison" : `/product/${activeProduct.id}`}
+        backHref={selectedProducts.length === 2 ? "/comparison" : `/product/${primaryProduct.id}`}
         backLabel={selectedProducts.length === 2 ? "Back to comparison" : "Back to product"}
+        transparentMain={true}
       >
-        <div className="mx-auto flex min-h-[72vh] max-w-3xl items-center py-6 md:py-8">
-          <GlowCard glowColor="green" customSize className="w-full rounded-[34px]">
-            <div className="space-y-6 p-8 text-center md:p-10">
+        <div className="mx-auto max-w-3xl flex flex-col min-h-full">
+          <GlowCard customSize className="w-full flex-1 flex flex-col items-center justify-center">
+            <div className="space-y-6 p-8 text-center md:p-10 w-full">
               <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-50">
                 <CheckCircle2 className="h-12 w-12 text-emerald-600" />
               </div>
@@ -161,23 +166,27 @@ export function LeadCaptureScreen() {
                   A team member will be with you shortly
                 </h1>
                 <p className="mt-3 text-base leading-7 text-slate-600">
-                  The handoff now includes the selected PC, customer details, and the journey highlights gathered during the session.
+                  The handoff now includes your {activeProducts.length > 1 ? "selected PCs" : "selected PC"}, contact details, and the journey highlights gathered during the session.
                 </p>
               </div>
 
               <div className="rounded-[28px] border border-slate-200 bg-white/90 p-5 text-left">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Lead recommendation
+                <div className="flex flex-col gap-4">
+                  {activeProducts.map((p, idx) => (
+                    <div key={p.id} className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          {activeProducts.length > 1 ? `Compared product ${idx + 1}` : "Lead recommendation"}
+                        </div>
+                        <div className="mt-2 text-xl font-semibold text-slate-950">
+                          {p.model}
+                        </div>
+                      </div>
+                      <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">
+                        {p.matchScore}% match
+                      </Badge>
                     </div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">
-                      {activeProduct.model}
-                    </div>
-                  </div>
-                  <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">
-                    {activeProduct.matchScore}% match
-                  </Badge>
+                  ))}
                 </div>
               </div>
 
@@ -208,80 +217,95 @@ export function LeadCaptureScreen() {
     <TwoZoneLayout
       commentary={commentary}
       commentaryTitle="Store handoff"
-      commentarySubtitle="A lightweight frontend-only alert for store staff"
+      commentarySubtitle="A lightweight alert for store staff"
       progressStep={7}
       progressTotal={8}
       stepLabel="Step 7 of 8"
-      backHref={selectedProducts.length === 2 ? "/comparison" : `/product/${activeProduct.id}`}
+      backHref={selectedProducts.length === 2 ? "/comparison" : `/product/${primaryProduct.id}`}
       backLabel={selectedProducts.length === 2 ? "Back to comparison" : "Back to product"}
+      transparentMain={true}
     >
-      <div className="mx-auto max-w-5xl space-y-6 py-6 md:py-8">
-        <div className="space-y-3">
-          <div className="inline-flex items-center rounded-full bg-[#2563eb]/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">
-            Contact store personnel
-          </div>
-          <div>
-            <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
-              We&apos;re alerting a sales associate to help you
-            </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-              Confirm the selected PC, update the customer details if needed, and add any discussion note before sending the in-store alert.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-          <GlowCard glowColor="blue" customSize className="rounded-[32px]">
-            <div className="space-y-5 p-6">
-              <img
-                src={activeProduct.image}
-                alt={activeProduct.model}
-                className="h-60 w-full rounded-[26px] object-cover"
-              />
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">
-                    {activeProduct.matchScore}% match
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="rounded-full border-slate-200 px-3 py-1 text-slate-600"
-                  >
-                    {activeProduct.bestFor}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Selected product
-                  </div>
-                  <h2 className="mt-1 text-2xl font-semibold text-slate-950">{activeProduct.model}</h2>
-                </div>
-                <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
-                  <div className="text-sm text-slate-500">Price</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-950">
-                    ₹{activeProduct.price.toLocaleString()}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">{activeProduct.emiFrom}</div>
-                </div>
-                <p className="text-sm leading-6 text-slate-600">{activeProduct.fitSummary}</p>
+      <div className="mx-auto max-w-5xl flex flex-col min-h-full">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-8 md:p-12 space-y-6">
+            <div className="space-y-3">
+              <div className="inline-flex items-center rounded-full bg-[#2563eb]/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">
+                Contact store personnel
+              </div>
+              <div>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
+                  We&apos;re alerting a sales associate to help you
+                </h1>
+                <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  Confirm your {activeProducts.length > 1 ? "selected PCs" : "selected PC"}, update your contact details if needed, and add any discussion note before sending the in-store alert.
+                </p>
               </div>
             </div>
-          </GlowCard>
 
-          <GlowCard glowColor="purple" customSize className="rounded-[32px]">
-            <div className="space-y-6 p-6 md:p-7">
+            <div className={`grid gap-6 ${activeProducts.length > 1 ? "grid-cols-1" : "xl:grid-cols-[0.92fr_1.08fr]"}`}>
+              <div className={activeProducts.length > 1 ? "grid gap-6 md:grid-cols-2" : "flex flex-col gap-6"}>
+                {activeProducts.map((p, idx) => (
+                  <motion.div 
+                    key={p.id} 
+                    onMouseEnter={() => setHoveredId(p.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    whileHover={{ scale: 1.02 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative rounded-[32px] border border-blue-100 bg-blue-50/50 p-6 transition-shadow hover:shadow-xl"
+                  >
+                    <CometBorderCanvas isHovered={hoveredId === p.id} cometHue={idx === 0 ? 220 : 270} radius={32} />
+                    <div className="relative z-10 space-y-5">
+                      <img
+                        src={p.image}
+                        alt={p.model}
+                        className={activeProducts.length > 1 ? "h-48 w-full rounded-[26px] object-cover" : "h-60 w-full rounded-[26px] object-cover"}
+                      />
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className="rounded-full bg-[#2563eb] px-3 py-1 text-white">
+                            {p.matchScore}% match
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="rounded-full border-slate-200 px-3 py-1 text-slate-600"
+                          >
+                            {p.bestFor}
+                          </Badge>
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            {activeProducts.length > 1 ? `Compared product ${idx + 1}` : "Selected product"}
+                          </div>
+                          <h2 className="mt-1 text-2xl font-semibold text-slate-950">{p.model}</h2>
+                        </div>
+                        <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
+                          <div className="text-sm text-slate-500">Price</div>
+                          <div className="mt-1 text-2xl font-semibold text-slate-950">
+                            ₹{p.price.toLocaleString()}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-500">{p.emiFrom}</div>
+                        </div>
+                        <p className="text-sm leading-6 text-slate-600">{p.fitSummary}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="rounded-[32px] border border-purple-100 bg-purple-50/50 p-6 md:p-7">
+                <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-semibold text-slate-950">Customer details recap</h2>
+                <h2 className="text-2xl font-semibold text-slate-950">Your details recap</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  These values stay frontend-only for now, but mirror the real handoff shape.
+                  Review your details before they are sent to the store staff.
                 </p>
               </div>
 
-              <div className="grid gap-5">
+              <div className={activeProducts.length > 1 ? "grid gap-5 md:grid-cols-2" : "grid gap-5"}>
                 <div className="grid gap-2">
                   <Label htmlFor="handoff-name" className="gap-2">
                     <UserRound className="h-4 w-4" />
-                    Customer name
+                    Your name
                   </Label>
                   <Input
                     id="handoff-name"
@@ -293,7 +317,7 @@ export function LeadCaptureScreen() {
                       }
                     }}
                     className="h-12 rounded-2xl border-slate-200 bg-black/5"
-                    placeholder="Customer full name"
+                    placeholder="Your full name"
                   />
                   {errors.name && <p className="text-sm text-rose-600">{errors.name}</p>}
                 </div>
@@ -339,7 +363,7 @@ export function LeadCaptureScreen() {
                   {errors.email && <p className="text-sm text-rose-600">{errors.email}</p>}
                 </div>
 
-                <div className="grid gap-2">
+                <div className={`grid gap-2 ${activeProducts.length > 1 ? "md:col-span-2" : ""}`}>
                   <Label htmlFor="handoff-note">Anything specific you&apos;d like to discuss?</Label>
                   <Textarea
                     id="handoff-note"
@@ -356,7 +380,6 @@ export function LeadCaptureScreen() {
                   variant="outline"
                   onClick={() => {
                     setCustomerInfo(formData);
-                    setSelectedProductId(activeProduct.id);
                     navigate("/share");
                   }}
                   className="rounded-full border-slate-200 bg-white truncate"
@@ -370,7 +393,6 @@ export function LeadCaptureScreen() {
                       return;
                     }
                     setCustomerInfo(formData);
-                    setSelectedProductId(activeProduct.id);
                     setAlertSent(true);
                   }}
                   className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8] px-6 shrink-0"
@@ -380,8 +402,10 @@ export function LeadCaptureScreen() {
                 </Button>
               </div>
             </div>
-          </GlowCard>
+          </div>
         </div>
+        </div>
+        </GlowCard>
       </div>
     </TwoZoneLayout>
   );

@@ -224,8 +224,14 @@ export function GuidedQuestionsScreen() {
     return true;
   };
 
-  const goToQuestion = (nextIndex: number, direction: "left" | "right") => {
+  const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("main-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("mobile-main-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goToQuestion = (nextIndex: number, direction: "left" | "right") => {
+    scrollToTop();
     setSlideDirection(direction);
     window.setTimeout(() => {
       setCurrentIndex(nextIndex);
@@ -239,7 +245,7 @@ export function GuidedQuestionsScreen() {
     }
 
     if (isLastQuestion) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToTop();
       navigate("/processing");
       return;
     }
@@ -350,7 +356,7 @@ export function GuidedQuestionsScreen() {
               <Input
                 value={otherText}
                 onChange={(event) => setOtherText(event.target.value)}
-                placeholder="Type the customer's answer"
+                placeholder="Type your answer"
                 className="h-12 rounded-2xl border-slate-200 bg-white"
               />
             </motion.div>
@@ -372,10 +378,10 @@ export function GuidedQuestionsScreen() {
         </p>
       </ExpandableCommentaryCard>
 
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
+      <div className="rounded-3xl border border-purple-200 bg-purple-50/50 p-5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg font-bold tracking-tight text-slate-950">Progress</h3>
-          <span className="text-sm text-slate-500">
+          <h3 className="text-lg font-bold tracking-tight text-purple-950">Progress</h3>
+          <span className="text-sm text-purple-700 font-medium">
             {currentIndex + 1} / {mockQuestions.length}
           </span>
         </div>
@@ -384,23 +390,23 @@ export function GuidedQuestionsScreen() {
             <div
               key={index}
               className={`h-2 rounded-full transition-all ${
-                index <= currentIndex ? "w-8 bg-[#2563eb]" : "w-2 bg-slate-200"
+                index <= currentIndex ? "w-8 bg-purple-600" : "w-2 bg-purple-200"
               }`}
             />
           ))}
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <h4 className="text-sm font-semibold text-slate-900">Answers so far</h4>
+      <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5">
+        <h4 className="text-sm font-semibold text-emerald-950">Answers so far</h4>
         <div className="mt-4 space-y-3">
           {answersSummary.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-500">Your running summary will build here as the customer moves through the cards.</p>
+            <p className="text-sm leading-6 text-emerald-700">Your running summary will build here as you move through the cards.</p>
           ) : (
             answersSummary.map((entry) => (
-              <div key={entry.id} className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">{entry.question}</div>
-                <div className="mt-2 text-sm font-bold text-blue-900">{entry.value}</div>
+              <div key={entry.id} className="rounded-2xl border border-emerald-100 bg-white/70 p-4">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">{entry.question}</div>
+                <div className="mt-2 text-sm font-bold text-emerald-900 break-all">{entry.value}</div>
                 {entry.fromVoice && (
                   <div className="mt-2 text-xs font-semibold text-emerald-700">Prefilled from the discovery input</div>
                 )}
@@ -429,46 +435,48 @@ export function GuidedQuestionsScreen() {
       stepLabel={directGuidedEntry ? "Step 2 of 8" : "Step 3 of 8"}
       backHref={directGuidedEntry ? "/discover-mode" : "/voice-results"}
       backLabel={directGuidedEntry ? "Back to discovery mode" : "Back to summary"}
+      transparentMain={true}
     >
-      <div className="mx-auto max-w-4xl py-6 md:py-8">
-        <AnimatePresence>
-          {isLastQuestion && !nextDisabled && (
-            <motion.div
-              initial={{ opacity: 0, y: 12, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: 12, height: 0 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="flex w-full justify-end overflow-hidden"
+      <div className="mx-auto max-w-4xl flex flex-col min-h-full">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="p-8 md:p-12 space-y-6">
+            <AnimatePresence>
+            {isLastQuestion && !nextDisabled && (
+              <motion.div
+                initial={{ opacity: 0, y: 12, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: 12, height: 0 }}
+                transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="flex w-full justify-end overflow-hidden"
+              >
+                <div className="mb-4">
+                  <Button
+                    size="lg"
+                    onClick={() => {
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                      navigate("/processing");
+                    }}
+                    className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
+                  >
+                    See recommendations
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          <div>
+            <AnimatePresence mode="wait">
+              <motion.div
+              key={currentQuestion.id}
+              initial={{ opacity: 0, x: slideDirection === "left" ? 120 : -120 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: slideDirection === "left" ? -120 : 120 }}
+              transition={{ duration: 0.34, ease: [0.25, 0.4, 0.25, 1] }}
+              className="space-y-6"
             >
-              <div className="mb-4">
-                <Button
-                  size="lg"
-                  onClick={() => {
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                    navigate("/processing");
-                  }}
-                  className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
-                >
-                  See recommendations
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
-        <div>
-          <AnimatePresence mode="wait">
-            <motion.div
-            key={currentQuestion.id}
-            initial={{ opacity: 0, x: slideDirection === "left" ? 120 : -120 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: slideDirection === "left" ? -120 : 120 }}
-            transition={{ duration: 0.34, ease: [0.25, 0.4, 0.25, 1] }}
-            className="space-y-6"
-          >
-            <GlowCard glowColor="blue" customSize className="rounded-[34px]">
-              <div className="space-y-8 p-6 md:p-8">
+              <div className="space-y-8">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-3">
                     <div className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
@@ -488,32 +496,33 @@ export function GuidedQuestionsScreen() {
 
                 <div className="grid gap-4">{currentQuestion.options.map((option) => renderOptionCard(option))}</div>
               </div>
-            </GlowCard>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={handleBack}
-                className="h-12 rounded-full border-slate-200 bg-white px-6"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleBack}
+                  className="h-12 rounded-full border-slate-200 bg-white px-6"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
 
-              <Button
-                size="lg"
-                disabled={nextDisabled}
-                onClick={() => handleNext()}
-                className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
-              >
-                {isLastQuestion ? "See recommendations" : "Next"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </motion.div>
-          </AnimatePresence>
+                <Button
+                  size="lg"
+                  disabled={nextDisabled}
+                  onClick={() => handleNext()}
+                  className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
+                >
+                  {isLastQuestion ? "See recommendations" : "Next"}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
+        </GlowCard>
       </div>
     </TwoZoneLayout>
   );

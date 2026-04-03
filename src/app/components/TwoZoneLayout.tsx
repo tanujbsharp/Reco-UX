@@ -7,6 +7,7 @@ import { AppBackground } from "./AppBackground";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { Button } from "../components/ui/button";
 import { cn } from "./ui/utils";
+import { BrandMark } from "./BrandMark";
 
 interface TwoZoneLayoutProps {
   children: ReactNode;
@@ -23,6 +24,7 @@ interface TwoZoneLayoutProps {
   startOverHref?: string;
   showStartOver?: boolean;
   contentClassName?: string;
+  transparentMain?: boolean;
 }
 
 function ProgressDots({
@@ -80,6 +82,7 @@ export function TwoZoneLayout({
   startOverHref = "/",
   showStartOver,
   contentClassName,
+  transparentMain = false,
 }: TwoZoneLayoutProps) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -102,19 +105,19 @@ export function TwoZoneLayout({
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-slate-50 text-slate-900">
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-slate-50 text-slate-900">
       <AppBackground />
 
-      <div className="relative z-10 flex min-h-screen flex-col">
+      <div className="relative z-10 flex h-full flex-col">
         {showTopBar && (
           <header className="border-b border-white/60 bg-white/65 backdrop-blur-xl">
             <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between gap-4 px-4 py-4 md:px-6">
               <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2563eb] text-sm font-semibold text-white shadow-[0_20px_40px_rgba(37,99,235,0.18)]">
-                  B#
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center">
+                  <BrandMark className="h-full w-full max-h-14 max-w-14 object-contain drop-shadow-[0_1px_3px_rgba(15,23,42,0.14)]" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                  <div className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-800">
                     Bsharp Reco
                   </div>
                   <div className="truncate text-sm font-medium text-slate-700">
@@ -162,10 +165,11 @@ export function TwoZoneLayout({
               style={{ willChange: "transform, opacity" }}
               className={cn(
                 showCommentary ? "w-[68%]" : "w-full",
-                "min-h-0 overflow-hidden rounded-[34px] border border-white/70 bg-white/68 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl"
+                "min-h-0 overflow-hidden rounded-[34px]",
+                !transparentMain && "border border-white/70 bg-white/68 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl"
               )}
             >
-              <div className={cn("h-full overflow-auto p-8", contentClassName)}>{children}</div>
+              <div id="main-scroll-area" className={cn("h-full overflow-auto", transparentMain ? "p-0" : "p-4 md:p-8", contentClassName)}>{children}</div>
             </motion.section>
 
             {showCommentary && (
@@ -191,8 +195,11 @@ export function TwoZoneLayout({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
               style={{ willChange: "transform, opacity" }}
+              id="mobile-main-scroll-area"
               className={cn(
-                "min-h-0 flex-1 overflow-auto rounded-[28px] border border-white/75 bg-white/72 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl",
+                showCommentary ? "w-[68%]" : "w-full",
+                "min-h-0 flex-1 overflow-auto rounded-[28px]",
+                !transparentMain && "border border-white/75 bg-white/72 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl",
                 contentClassName
               )}
             >
