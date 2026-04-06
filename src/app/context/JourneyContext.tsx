@@ -40,6 +40,9 @@ interface JourneyContextType {
   setCustomerInfo: (info: CustomerInfo) => void;
   storeNote: string;
   setStoreNote: (value: string) => void;
+  /** 1–5 stars: shopper rating of how helpful the recommendation set was (for learning / analytics). */
+  recommendationFeedbackStars: number | null;
+  setRecommendationFeedbackStars: (value: number | null) => void;
   resetJourney: () => void;
 }
 
@@ -59,6 +62,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     email: "",
   });
   const [storeNote, setStoreNote] = useState("");
+  const [recommendationFeedbackStars, setRecommendationFeedbackStars] = useState<number | null>(null);
 
   const addAnswer = (answer: Answer) => {
     setAnswers((prev) => {
@@ -116,6 +120,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     setSelectedProductId(null);
     setCustomerInfo({ name: "", phone: "", email: "" });
     setStoreNote("");
+    setRecommendationFeedbackStars(null);
   };
 
   return (
@@ -142,6 +147,8 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
         setCustomerInfo,
         storeNote,
         setStoreNote,
+        recommendationFeedbackStars,
+        setRecommendationFeedbackStars,
         resetJourney,
       }}
     >

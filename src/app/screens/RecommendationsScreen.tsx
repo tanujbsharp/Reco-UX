@@ -42,7 +42,13 @@ function starCount(score: number) {
 
 export function RecommendationsScreen() {
   const navigate = useNavigate();
-  const { selectedProducts, toggleProductSelection } = useJourney();
+  const {
+    selectedProducts,
+    toggleProductSelection,
+    recommendationFeedbackStars,
+    setRecommendationFeedbackStars,
+  } = useJourney();
+  const [feedbackHover, setFeedbackHover] = useState<number | null>(null);
   const recommendedProducts = useMemo(() => mockProducts.slice(0, 3), []);
   const [activeProductId, setActiveProductId] = useState(recommendedProducts[0].id);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -155,11 +161,12 @@ export function RecommendationsScreen() {
                   exit={{ opacity: 0, scale: 0.95 }}
                 >
                   <Button
+                    variant="outline"
                     size="lg"
                     onClick={() => navigate("/comparison")}
-                    className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
+                    className="h-12 gap-2 rounded-full !border-0 bg-gradient-to-r from-[#2563eb] via-indigo-600 to-violet-600 px-8 text-base font-semibold !text-white shadow-[0_12px_40px_-8px_rgba(37,99,235,0.55),0_4px_16px_-4px_rgba(99,102,241,0.4)] transition-[transform,box-shadow,filter] hover:!bg-gradient-to-r hover:brightness-[1.05] hover:shadow-[0_16px_48px_-8px_rgba(37,99,235,0.6)] active:scale-[0.98]"
                   >
-                    Compare selected ({selectedProducts.length}/2)
+                    Compare now
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </motion.div>
@@ -294,14 +301,14 @@ export function RecommendationsScreen() {
                           ))}
                         </div>
 
-                        {/* Action buttons */}
-                        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                        {/* Action buttons — no opaque bar here so the card hover tint shows through */}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200/50 pt-3">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setActiveProductId(product.id)}
                             className={`rounded-full px-4 text-sm ${
-                              isActive ? "bg-[#2563eb]/8 text-[#2563eb]" : "text-slate-600 hover:text-[#2563eb]"
+                              isActive ? "bg-[#2563eb]/10 font-medium text-[#2563eb]" : "text-slate-600 hover:bg-white hover:text-[#2563eb]"
                             }`}
                           >
                             Why this?
@@ -311,14 +318,24 @@ export function RecommendationsScreen() {
                             size="sm"
                             onClick={() => toggleProductSelection(product.id)}
                             disabled={disableCompare}
-                            className={`rounded-full px-4 text-sm ${
-                              isSelected
-                                ? "border-[#3b82f6] bg-[#3b82f6]/8 text-[#3b82f6]"
-                                : "border-slate-200 text-slate-600"
-                            }`}
+                            className={cn(
+                              "h-10 gap-2 rounded-full px-5 text-sm font-semibold shadow-sm transition-[transform,box-shadow,border-color,background-color] disabled:!opacity-100",
+                              disableCompare &&
+                                "cursor-not-allowed !border-slate-200 !bg-slate-100 !text-slate-400 !opacity-55 shadow-none",
+                              !disableCompare &&
+                                !isSelected &&
+                                "border-2 border-indigo-400/90 bg-gradient-to-b from-indigo-50 to-white text-indigo-900 hover:border-indigo-500 hover:from-indigo-100 hover:shadow-md hover:shadow-indigo-500/20 active:scale-[0.98]",
+                              !disableCompare &&
+                                isSelected &&
+                                "border-2 border-emerald-600 bg-gradient-to-b from-emerald-500 to-emerald-600 !text-white shadow-md shadow-emerald-500/30 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-emerald-500/35 active:scale-[0.98]"
+                            )}
                           >
-                            <Scale className="h-3.5 w-3.5" />
-                            {isSelected ? "Selected" : "Compare"}
+                            {isSelected ? (
+                              <Check className="h-4 w-4 shrink-0 text-white" strokeWidth={2.5} />
+                            ) : (
+                              <Scale className="h-4 w-4 shrink-0 text-indigo-600" strokeWidth={2.25} />
+                            )}
+                            {isSelected ? "In comparison" : "Add to compare"}
                           </Button>
                           <Button
                             size="sm"
@@ -337,24 +354,81 @@ export function RecommendationsScreen() {
             })}
           </div>
 
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.35 }}
+            className="rounded-3xl border border-amber-200/80 bg-amber-50/50 px-5 py-4 sm:px-6"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">How helpful was this shortlist?</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Your rating helps us improve.
+                </p>
+              </div>
+              <div
+                className="flex items-center gap-1"
+                onMouseLeave={() => setFeedbackHover(null)}
+                role="group"
+                aria-label="Rate recommendations from 1 to 5 stars"
+              >
+                {[1, 2, 3, 4, 5].map((n) => {
+                  const shown = feedbackHover ?? recommendationFeedbackStars ?? 0;
+                  const filled = n <= shown;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                      aria-pressed={recommendationFeedbackStars != null && n <= recommendationFeedbackStars}
+                      onMouseEnter={() => setFeedbackHover(n)}
+                      onClick={() =>
+                        setRecommendationFeedbackStars(recommendationFeedbackStars === n ? null : n)
+                      }
+                      className="rounded-lg p-1 text-slate-300 transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+                    >
+                      <Star
+                        className={cn(
+                          "h-8 w-8",
+                          filled ? "fill-amber-400 text-amber-400" : "fill-slate-200/80 text-slate-300"
+                        )}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {recommendationFeedbackStars != null && (
+              <p className="mt-3 text-xs font-medium text-amber-900/80">Thanks — saved for this session.</p>
+            )}
+          </motion.div>
+
           {/* Bottom actions */}
-          <div className="flex flex-col gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
             <Button
               variant="outline"
               size="lg"
               onClick={() => navigate("/questions")}
-              className="h-12 rounded-full border-slate-200 bg-white px-6"
+              className="h-12 rounded-full border-slate-200 bg-white px-6 text-slate-700 hover:bg-slate-50"
             >
               Adjust preferences
             </Button>
             <Button
+              variant="outline"
               size="lg"
               disabled={selectedProducts.length !== 2}
               onClick={() => navigate("/comparison")}
-              className="h-12 rounded-full bg-[#2563eb] px-8 text-white hover:bg-[#1d4ed8]"
+              className={cn(
+                "min-h-[3.25rem] gap-2 rounded-full px-8 py-3 text-base font-semibold transition-[transform,box-shadow,filter] disabled:!opacity-100",
+                selectedProducts.length === 2
+                  ? "!border-0 bg-gradient-to-r from-[#2563eb] via-indigo-600 to-violet-600 !text-white shadow-[0_14px_44px_-10px_rgba(37,99,235,0.55),0_8px_24px_-8px_rgba(99,102,241,0.35)] hover:!bg-gradient-to-r hover:brightness-[1.06] hover:shadow-[0_18px_52px_-10px_rgba(37,99,235,0.58)] active:scale-[0.99]"
+                  : "!border-2 !border-dashed !border-slate-300 !bg-slate-100/95 !text-slate-500 shadow-none hover:!bg-slate-100"
+              )}
             >
-              Compare selected ({selectedProducts.length}/2)
-              <ArrowRight className="h-4 w-4" />
+              <Scale className="h-5 w-5 shrink-0 opacity-90" />
+              Open comparison ({selectedProducts.length}/2)
+              <ArrowRight className="h-4 w-4 shrink-0" />
             </Button>
           </div>
         </div>
