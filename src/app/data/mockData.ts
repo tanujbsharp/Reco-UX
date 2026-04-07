@@ -12,7 +12,7 @@ export interface Product {
   id: string;
   brand: string;
   model: string;
-  family: "ZenithBook Light" | "ZenithBook Pro";
+  family: "Lenovo Yoga Slim" | "Lenovo ThinkPad X1";
   image: string;
   gallery: string[];
   price: number;
@@ -103,35 +103,35 @@ const createLaptopIllustration = ({
 };
 
 const air13Image = createLaptopIllustration({
-  label: "ZenithBook Light 13",
+  label: "Lenovo Yoga Slim 13",
   start: "#1C2C4D",
   end: "#7BA7DF",
   accent: "#A4C5F5",
 });
 
 const air15Image = createLaptopIllustration({
-  label: "ZenithBook Light 15",
+  label: "Lenovo Yoga Slim 15",
   start: "#2A365E",
   end: "#CBB9F8",
   accent: "#B5DDFD",
 });
 
 const pro14Image = createLaptopIllustration({
-  label: "ZenithBook Pro 14",
+  label: "Lenovo ThinkPad X1 14",
   start: "#121B29",
   end: "#5784C1",
   accent: "#9DD0FF",
 });
 
 const pro14MaxImage = createLaptopIllustration({
-  label: "ZenithBook Pro 14 Pro",
+  label: "Lenovo ThinkPad X1 14 Pro",
   start: "#101820",
   end: "#729EFF",
   accent: "#B6C7FF",
 });
 
 const pro16Image = createLaptopIllustration({
-  label: "ZenithBook Pro 16",
+  label: "Lenovo ThinkPad X1 16",
   start: "#14171F",
   end: "#7A87A8",
   accent: "#9CAED6",
@@ -140,14 +140,14 @@ const pro16Image = createLaptopIllustration({
 export const mockProducts: Product[] = [
   {
     id: "zbl-13-c7",
-    brand: "Zenith",
-    model: 'ZenithBook Light 13" Core 7',
-    family: "ZenithBook Light",
+    brand: "Lenovo",
+    model: 'Lenovo Yoga Slim 13" Core 7',
+    family: "Lenovo Yoga Slim",
     image: air13Image,
     gallery: [air13Image, air13Image, air13Image],
     price: 129900,
     emiFrom: "₹10,825/mo",
-    chip: "Zenith Core 7",
+    chip: "Intel Core Ultra 7",
     memory: "16GB unified memory",
     storage: "512GB SSD",
     display: '13.6" Liquid Retina',
@@ -181,7 +181,7 @@ export const mockProducts: Product[] = [
     ],
     cons: [
       "Not ideal for long 4K render sessions",
-      "Port selection is more limited than ZenithBook Pro",
+      "Port selection is more limited than Lenovo ThinkPad X1",
     ],
     implications: [
       "Choose this when portability and battery matter more than raw pro-app throughput.",
@@ -191,14 +191,14 @@ export const mockProducts: Product[] = [
     finance: ["No-cost EMI up to 9 months", "Exchange bonus available in-store"],
     documents: [
       { label: "Product brochure", value: "Digital brochure available" },
-      { label: "Warranty", value: "1-year limited warranty + ZenithCare+ option" },
+      { label: "Warranty", value: "1-year limited warranty + Lenovo Premium Care option" },
     ],
     salespersonTips: [
       "Apps launch extremely fast and demonstrate snappy performance for daily work.",
       "The lightweight design makes it incredibly easy to carry between classes or coffee shops.",
     ],
     specs: [
-      { label: "Chip", value: "Zenith Core 7" },
+      { label: "Chip", value: "Intel Core Ultra 7" },
       { label: "Memory", value: "16GB unified memory" },
       { label: "Storage", value: "512GB SSD" },
       { label: "Display", value: '13.6" Liquid Retina' },
@@ -210,14 +210,14 @@ export const mockProducts: Product[] = [
   },
   {
     id: "zbl-15-c7",
-    brand: "Zenith",
-    model: 'ZenithBook Light 15" Core 7',
-    family: "ZenithBook Light",
+    brand: "Lenovo",
+    model: 'Lenovo Yoga Slim 15" Core 7',
+    family: "Lenovo Yoga Slim",
     image: air15Image,
     gallery: [air15Image, air15Image, air15Image],
     price: 149900,
     emiFrom: "₹12,492/mo",
-    chip: "Zenith Core 7",
+    chip: "Intel Core Ultra 7",
     memory: "16GB unified memory",
     storage: "512GB SSD",
     display: '15.3" Liquid Retina',
@@ -250,7 +250,7 @@ export const mockProducts: Product[] = [
       "Looks premium on a retail counter",
     ],
     cons: [
-      "Fewer ports than ZenithBook Pro",
+      "Fewer ports than Lenovo ThinkPad X1",
       "Not the best fit for intense long-duration rendering",
     ],
     implications: [
@@ -261,14 +261,14 @@ export const mockProducts: Product[] = [
     finance: ["No-cost EMI up to 12 months", "Upgrade plan eligibility available"],
     documents: [
       { label: "Display guide", value: "Retail display and panel overview" },
-      { label: "Warranty", value: "1-year limited warranty + ZenithCare+ option" },
+      { label: "Warranty", value: "1-year limited warranty + Lenovo Premium Care option" },
     ],
     salespersonTips: [
       "The large 15.3-inch screen gives you plenty of room to arrange multiple apps side by side.",
       "At just 1.51 kg, it is much easier to carry around compared to traditional 15-inch laptops.",
     ],
     specs: [
-      { label: "Chip", value: "Zenith Core 7" },
+      { label: "Chip", value: "Intel Core Ultra 7" },
       { label: "Memory", value: "16GB unified memory" },
       { label: "Storage", value: "512GB SSD" },
       { label: "Display", value: '15.3" Liquid Retina' },
@@ -280,14 +280,14 @@ export const mockProducts: Product[] = [
   },
   {
     id: "zbp-14-c9",
-    brand: "Zenith",
-    model: 'ZenithBook Pro 14" Core 9',
-    family: "ZenithBook Pro",
+    brand: "Lenovo",
+    model: 'Lenovo ThinkPad X1 14" Core 9',
+    family: "Lenovo ThinkPad X1",
     image: pro14Image,
     gallery: [pro14Image, pro14Image, pro14Image],
     price: 169900,
     emiFrom: "₹14,158/mo",
-    chip: "Zenith Core 9",
+    chip: "Intel Core Ultra 9",
     memory: "16GB unified memory",
     storage: "512GB SSD",
     display: '14.2" Liquid Retina XDR',
@@ -331,14 +331,14 @@ export const mockProducts: Product[] = [
     finance: ["Business financing available", "No-cost EMI up to 12 months"],
     documents: [
       { label: "Spec sheet", value: "Detailed spec sheet available" },
-      { label: "Warranty", value: "1-year limited warranty + ZenithCare+ option" },
+      { label: "Warranty", value: "1-year limited warranty + Lenovo Premium Care option" },
     ],
     salespersonTips: [
       "The XDR display makes photos, videos, and presentations look incredibly vivid and sharp.",
       "Built-in HDMI and SD card slots mean you don't need to carry extra dongles to connect devices.",
     ],
     specs: [
-      { label: "Chip", value: "Zenith Core 9" },
+      { label: "Chip", value: "Intel Core Ultra 9" },
       { label: "Memory", value: "16GB unified memory" },
       { label: "Storage", value: "512GB SSD" },
       { label: "Display", value: '14.2" Liquid Retina XDR' },
@@ -350,14 +350,14 @@ export const mockProducts: Product[] = [
   },
   {
     id: "zbp-14-c9pro",
-    brand: "Zenith",
-    model: 'ZenithBook Pro 14" Core 9 Pro',
-    family: "ZenithBook Pro",
+    brand: "Lenovo",
+    model: 'Lenovo ThinkPad X1 14" Core 9 Pro',
+    family: "Lenovo ThinkPad X1",
     image: pro14MaxImage,
     gallery: [pro14MaxImage, pro14MaxImage, pro14MaxImage],
     price: 219900,
     emiFrom: "₹18,325/mo",
-    chip: "Zenith Core 9 Pro",
+    chip: "Intel Core Ultra 9 Pro",
     memory: "24GB unified memory",
     storage: "1TB SSD",
     display: '14.2" Liquid Retina XDR',
@@ -401,14 +401,14 @@ export const mockProducts: Product[] = [
     finance: ["Business financing available", "Exchange offer available"],
     documents: [
       { label: "Performance guide", value: "Pro workflow positioning guide" },
-      { label: "Warranty", value: "1-year limited warranty + ZenithCare+ option" },
+      { label: "Warranty", value: "1-year limited warranty + Lenovo Premium Care option" },
     ],
     salespersonTips: [
       "The extra 24GB of unified memory keeps heavy projects running smoothly without slowing down.",
       "A massive 1TB SSD means you can store huge files and apps directly on your PC without external drives.",
     ],
     specs: [
-      { label: "Chip", value: "Zenith Core 9 Pro" },
+      { label: "Chip", value: "Intel Core Ultra 9 Pro" },
       { label: "Memory", value: "24GB unified memory" },
       { label: "Storage", value: "1TB SSD" },
       { label: "Display", value: '14.2" Liquid Retina XDR' },
@@ -420,14 +420,14 @@ export const mockProducts: Product[] = [
   },
   {
     id: "zbp-16-c9pro",
-    brand: "Zenith",
-    model: 'ZenithBook Pro 16" Core 9 Pro',
-    family: "ZenithBook Pro",
+    brand: "Lenovo",
+    model: 'Lenovo ThinkPad X1 16" Core 9 Pro',
+    family: "Lenovo ThinkPad X1",
     image: pro16Image,
     gallery: [pro16Image, pro16Image, pro16Image],
     price: 279900,
     emiFrom: "₹23,325/mo",
-    chip: "Zenith Core 9 Pro",
+    chip: "Intel Core Ultra 9 Pro",
     memory: "24GB unified memory",
     storage: "1TB SSD",
     display: '16.2" Liquid Retina XDR',
@@ -471,14 +471,14 @@ export const mockProducts: Product[] = [
     finance: ["Business financing available", "Premium exchange offer available"],
     documents: [
       { label: "Display guide", value: "16-inch comparison sheet" },
-      { label: "Warranty", value: "1-year limited warranty + ZenithCare+ option" },
+      { label: "Warranty", value: "1-year limited warranty + Lenovo Premium Care option" },
     ],
     salespersonTips: [
       "The massive 16.2-inch XDR screen is perfect for arranging multiple windows and editing timelines side by side.",
       "The Pro-tier battery life lasts up to 24 hours, giving you the power of a desktop wherever you go.",
     ],
     specs: [
-      { label: "Chip", value: "Zenith Core 9 Pro" },
+      { label: "Chip", value: "Intel Core Ultra 9 Pro" },
       { label: "Memory", value: "24GB unified memory" },
       { label: "Storage", value: "1TB SSD" },
       { label: "Display", value: '16.2" Liquid Retina XDR' },

@@ -13,6 +13,7 @@ import { motion } from "motion/react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { ExpandableCommentaryCard } from "../components/ExpandableCommentaryCard";
 import { GlowCard } from "../components/GlowCard";
+import { ProductChatWidget } from "../components/ProductChatWidget";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -498,6 +499,7 @@ export function ProductDetailScreen() {
         </div>
         </GlowCard>
       </div>
+      <ProductChatWidget contextProducts={[product]} />
     </TwoZoneLayout>
   );
 }

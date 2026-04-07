@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowRight, Check, HelpCircle, Scale } from "lucide-react";
+import { ArrowRight, Check, HelpCircle } from "lucide-react";
 import { motion } from "motion/react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
@@ -9,11 +9,12 @@ import { Badge } from "../components/ui/badge";
 import { mockCommentary, mockProducts } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
+import { ProductChatWidget } from "../components/ProductChatWidget";
 
 const chipScoreMap: Record<string, number> = {
-  "Zenith Core 7": 1,
-  "Zenith Core 9": 2,
-  "Zenith Core 9 Pro": 3,
+  "Intel Core Ultra 7": 1,
+  "Intel Core Ultra 9": 2,
+  "Intel Core Ultra 9 Pro": 3,
 };
 
 function parseMetric(value: string) {
@@ -140,7 +141,7 @@ export function ComparisonScreen() {
               className={`relative rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${leftProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
             >
               <CometBorderCanvas isHovered={hoveredId === leftProduct.id} cometHue={leftProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
-              <div className="relative z-10 space-y-5">
+              <div className="relative z-[2] space-y-5">
                 <img src={leftProduct.image} alt={leftProduct.model} className="h-52 w-full rounded-[24px] object-cover" />
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{leftProduct.family}</div>
@@ -172,7 +173,7 @@ export function ComparisonScreen() {
               className={`relative rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${rightProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
             >
               <CometBorderCanvas isHovered={hoveredId === rightProduct.id} cometHue={rightProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
-              <div className="relative z-10 space-y-5">
+              <div className="relative z-[2] space-y-5">
                 <img src={rightProduct.image} alt={rightProduct.model} className="h-52 w-full rounded-[24px] object-cover" />
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{rightProduct.family}</div>
@@ -329,6 +330,7 @@ export function ComparisonScreen() {
         </div>
         </GlowCard>
       </div>
+      <ProductChatWidget contextProducts={productsToCompare} />
     </TwoZoneLayout>
   );
 }

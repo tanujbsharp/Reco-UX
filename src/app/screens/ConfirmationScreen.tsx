@@ -74,14 +74,15 @@ export function ConfirmationScreen() {
                   className="relative group cursor-pointer rounded-[28px] border border-slate-200 bg-white/90 text-left shadow-[0_24px_70px_rgba(15,23,42,0.05)] transition-shadow hover:border-slate-300 hover:bg-white hover:shadow-xl"
                 >
                   <CometBorderCanvas isHovered={hoveredId === p.id} cometHue={idx === 0 ? 220 : 270} radius={28} />
-                  <div className="relative z-10 w-full overflow-hidden rounded-t-[28px]">
+                  {/* z below comet canvas (z-3) so border trail draws on top; canvas center stays transparent */}
+                  <div className="relative z-[2] w-full overflow-hidden rounded-t-[28px]">
                     <img
                       src={p.image}
                       alt={p.model}
                       className="aspect-video w-full object-cover"
                     />
                   </div>
-                  <div className="relative z-10 space-y-3 p-5">
+                  <div className="relative z-[2] space-y-3 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                         {p.family}
