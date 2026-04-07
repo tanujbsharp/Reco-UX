@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MessageSquareText, X, Send, Paperclip, Smile, ChevronLeft, Sparkles } from "lucide-react";
+import { MessageSquareText, X, Send, ChevronLeft, Sparkles } from "lucide-react";
 import { Product } from "../data/mockData";
 import { cn } from "./ui/utils";
 
@@ -242,9 +242,6 @@ export function ProductChatWidget({ contextProducts }: { contextProducts: Produc
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 />
-                <button className="p-1.5 text-slate-400 transition-colors hover:text-slate-600">
-                  <Paperclip className="h-4 w-4" />
-                </button>
                 <button
                   onClick={handleSend}
                   disabled={!inputValue.trim()}
