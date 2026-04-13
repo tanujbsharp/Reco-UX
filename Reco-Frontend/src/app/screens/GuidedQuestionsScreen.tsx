@@ -798,9 +798,9 @@ export function GuidedQuestionsScreen() {
       backLabel={directGuidedEntry ? "Back to discovery mode" : "Back to summary"}
       transparentMain={true}
     >
-      <div className="mx-auto max-w-4xl flex flex-col min-h-full">
+      <div className="mx-auto w-full max-w-6xl min-h-full flex flex-col">
         <GlowCard customSize className="w-full flex-1 flex flex-col">
-          <div className="p-8 md:p-12 space-y-6">
+          <div className="min-h-full p-8 md:p-12 space-y-6">
           <div>
             <AnimatePresence mode="wait">
               <motion.div

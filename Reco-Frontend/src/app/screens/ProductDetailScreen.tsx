@@ -393,7 +393,7 @@ export function ProductDetailScreen() {
       </ExpandableCommentaryCard>
 
       <div className="rounded-3xl border border-amber-200/70 bg-amber-50/60 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">Talking points</h4>
+        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">Key points</h4>
         <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-700">
           {talkingPoints.map((tip, i) => (
             <motion.li

@@ -77,9 +77,9 @@ export function VoiceResultsScreen() {
       backLabel="Back"
       transparentMain={true}
     >
-      <div className="mx-auto max-w-4xl flex flex-col min-h-full">
+      <div className="mx-auto w-full max-w-6xl min-h-full flex flex-col">
         <GlowCard customSize className="w-full flex-1 flex flex-col">
-          <div className="p-8 md:p-12 space-y-12">
+          <div className="min-h-full p-8 md:p-12 space-y-12">
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 text-center">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
               <CheckCheck className="h-3.5 w-3.5" />

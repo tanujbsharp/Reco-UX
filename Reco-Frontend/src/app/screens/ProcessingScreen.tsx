@@ -71,10 +71,11 @@ export function ProcessingScreen({ autoRedirect = true }: { autoRedirect?: boole
       backLabel="Back to questions"
       transparentMain={true}
     >
-      <GlowCard customSize className="mx-auto flex h-full min-h-full w-full max-w-4xl flex-col rounded-[34px]">
-        <div className="flex h-full min-h-full items-center justify-center p-8 md:p-12">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="relative mx-auto mb-10 flex h-64 w-64 items-center justify-center">
+      <div className="mx-auto flex w-full max-w-6xl min-h-full flex-col">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="flex min-h-full flex-1 items-center justify-center p-8 md:p-12">
+            <div className="mx-auto max-w-2xl text-center">
+              <div className="relative mx-auto mb-10 flex h-64 w-64 items-center justify-center">
               {orbitDurations.map((duration, index) => (
                 <motion.div
                   key={duration}
@@ -101,13 +102,14 @@ export function ProcessingScreen({ autoRedirect = true }: { autoRedirect?: boole
               </motion.div>
             </div>
 
-            <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Finding your best PC matches...</h1>
-            <p className="mt-4 text-lg leading-8 text-slate-600">
-              We&apos;re weighing portability, workflow fit, battery life, display preference, and long-term headroom before showing the strongest recommendations.
-            </p>
+              <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Finding your best PC matches...</h1>
+              <p className="mt-4 text-lg leading-8 text-slate-600">
+                We&apos;re weighing portability, workflow fit, battery life, display preference, and long-term headroom before showing the strongest recommendations.
+              </p>
+            </div>
           </div>
-        </div>
-      </GlowCard>
+        </GlowCard>
+      </div>
     </TwoZoneLayout>
   );
 }

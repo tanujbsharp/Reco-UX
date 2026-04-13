@@ -32,11 +32,12 @@ const COMET_COLORS_BY_RANK = [
   { hue: 168, sat: 58, lumBase: 28 }, // Rank 3: darker jade
 ];
 
-function starCount(score: number) {
-  if (score >= 93) return 5;
-  if (score >= 86) return 4;
-  if (score >= 78) return 3;
-  return 3;
+function displayedStarCount(score: number) {
+  return score >= 92 ? 5 : 4;
+}
+
+function displayedStarLabel(score: number) {
+  return score >= 92 ? "4.5 stars" : "4 stars";
 }
 
 function mapRecommendationRecord(record: Record<string, unknown>): Product {
@@ -286,8 +287,9 @@ export function RecommendationsScreen() {
       backLabel="Back to questions"
       transparentMain={true}
     >
-      <GlowCard customSize className="mx-auto w-full max-w-4xl rounded-[34px]">
-        <div className="space-y-6 p-6 md:p-8">
+      <div className="mx-auto w-full max-w-6xl min-h-full flex flex-col">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="min-h-full space-y-6 p-6 md:p-8">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -332,7 +334,8 @@ export function RecommendationsScreen() {
               const isSelected = selectedProducts.includes(product.id);
               const disableCompare = compareLimitReached && !isSelected;
               const rank = rankConfig[index] ?? rankConfig[2];
-              const stars = starCount(product.matchScore);
+              const stars = displayedStarCount(product.matchScore);
+              const starLabel = displayedStarLabel(product.matchScore);
               const isActive = activeProductId === product.id;
 
               return (
@@ -415,7 +418,7 @@ export function RecommendationsScreen() {
                                   />
                                 ))}
                               </div>
-                              <span className="text-xs text-slate-500">({stars} star)</span>
+                              <span className="text-xs text-slate-500">({starLabel})</span>
                             </div>
                           </div>
 
@@ -587,8 +590,9 @@ export function RecommendationsScreen() {
               <ArrowRight className="h-4 w-4 shrink-0" />
             </Button>
           </div>
-        </div>
-      </GlowCard>
+          </div>
+        </GlowCard>
+      </div>
     </TwoZoneLayout>
   );
 }

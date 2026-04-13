@@ -286,9 +286,9 @@ export function VoiceDiscoveryScreen() {
       backLabel="Back to discovery mode"
       transparentMain={true}
     >
-      <div className="mx-auto flex h-full min-h-0 max-w-4xl flex-col">
-        <GlowCard customSize className="flex h-full min-h-0 w-full flex-1 flex-col">
-          <div className="flex h-full min-h-0 flex-col overflow-auto p-8 md:p-12">
+      <div className="mx-auto flex w-full max-w-6xl min-h-full flex-col">
+        <GlowCard customSize className="w-full flex-1 flex flex-col">
+          <div className="flex min-h-full flex-1 flex-col p-8 md:p-12">
             <div className="space-y-4 text-center">
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">

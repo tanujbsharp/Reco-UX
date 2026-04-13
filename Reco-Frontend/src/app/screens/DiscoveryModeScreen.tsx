@@ -104,8 +104,9 @@ export function DiscoveryModeScreen() {
       transparentMain={true}
       contentClassName="p-0 flex flex-col"
     >
-      <GlowCard glowColor="blue" customSize className="flex h-full w-full flex-col overflow-hidden rounded-[34px]">
-        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto p-8 md:p-12">
+      <div className="mx-auto flex w-full max-w-6xl min-h-full flex-col">
+        <GlowCard glowColor="blue" customSize className="w-full flex-1 flex flex-col rounded-[34px]">
+          <div className="flex min-h-full flex-1 flex-col items-center justify-center p-8 md:p-12">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -202,8 +203,9 @@ export function DiscoveryModeScreen() {
             />
           </motion.div>
         </div>
-        </div>
-      </GlowCard>
+          </div>
+        </GlowCard>
+      </div>
     </TwoZoneLayout>
   );
 }

@@ -648,11 +648,14 @@ class RecommendationScorer:
         all_rules = opensearch_rules + mysql_overrides
 
         pushed_products = []
+        conditional_promotions = []
 
         for rule in all_rules:
             rule_type = rule.get('type', '')
             product_id = rule.get('product_id')
             factor = rule.get('factor', 1.0)
+            min_fit_threshold = float(rule.get('min_fit_threshold', 0.3) or 0.3)
+            threshold_percentage = min_fit_threshold * 100 if min_fit_threshold <= 1 else min_fit_threshold
 
             if rule_type == 'suppress':
                 scored = [
@@ -663,7 +666,7 @@ class RecommendationScorer:
                 for product in scored:
                     if product['product_id'] == product_id:
                         # Only boost if product meets minimum fit threshold
-                        if product['match_percentage'] >= 30:
+                        if product['match_percentage'] >= threshold_percentage:
                             product['final_score'] *= float(factor)
                             product['scoring_breakdown']['moderation_boost'] = float(factor)
 
@@ -674,8 +677,16 @@ class RecommendationScorer:
                     'target_rank': target_rank,
                 })
 
+            elif rule_type == 'promote_if_close':
+                conditional_promotions.append({
+                    'product_id': product_id,
+                    'max_rank': int(rule.get('max_rank', 2) or 2),
+                    'max_gap_percent': float(rule.get('max_gap_percent', 3.0) or 3.0),
+                })
+
         # Store push directives for use in ranking step
         self._pushed_products = pushed_products
+        self._conditional_promotions = conditional_promotions
 
         return scored
 
@@ -730,10 +741,13 @@ class RecommendationScorer:
             )
             return [
                 {
-                    'type': rule.rule_type,
-                    'product_id': rule.product_id,
-                    'factor': getattr(rule, 'boost_factor', 1.0),
-                    'rank': getattr(rule, 'target_rank', 1),
+                    'type': rule.target_type,
+                    'product_id': rule.target_product_id,
+                    'factor': float(rule.boost_strength or 1.0),
+                    'min_fit_threshold': float(rule.min_fit_threshold or 0.3),
+                    'rank': int(rule.target_rank or 1),
+                    'max_rank': int(rule.max_rank or 2),
+                    'max_gap_percent': float(rule.max_gap_percent or 3.0),
                 }
                 for rule in rules
             ]
@@ -793,6 +807,37 @@ class RecommendationScorer:
             if idx is not None and idx != target_rank:
                 product = scored.pop(idx)
                 scored.insert(min(target_rank, len(scored)), product)
+
+        promotions = getattr(self, '_conditional_promotions', [])
+        for promotion in promotions:
+            if not scored:
+                break
+
+            top_match = float(scored[0].get('match_percentage', 0) or 0)
+            pid = promotion['product_id']
+            max_rank = max(1, int(promotion.get('max_rank', 2) or 2))
+            max_gap_percent = max(0.0, float(promotion.get('max_gap_percent', 3.0) or 3.0))
+
+            idx = next(
+                (i for i, p in enumerate(scored) if p['product_id'] == pid),
+                None,
+            )
+            if idx is None:
+                continue
+
+            current_rank = idx + 1
+            candidate_match = float(scored[idx].get('match_percentage', 0) or 0)
+            gap = top_match - candidate_match
+
+            if current_rank <= max_rank and gap <= max_gap_percent:
+                product = scored.pop(idx)
+                scored.insert(0, product)
+                product.setdefault('scoring_breakdown', {})['conditional_promotion'] = {
+                    'applied': True,
+                    'max_rank': max_rank,
+                    'max_gap_percent': max_gap_percent,
+                    'gap_to_top': gap,
+                }
 
         # Diversity rule: no more than 2 from the same family in top 3
         final = []

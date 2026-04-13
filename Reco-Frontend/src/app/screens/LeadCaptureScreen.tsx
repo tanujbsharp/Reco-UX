@@ -161,9 +161,9 @@ export function LeadCaptureScreen() {
         backLabel={selectedProducts.length === 2 ? "Back to comparison" : "Back to product"}
         transparentMain={true}
       >
-        <div className="mx-auto max-w-3xl flex flex-col min-h-full">
+        <div className="mx-auto w-full max-w-6xl min-h-full flex flex-col">
           <GlowCard customSize className="w-full flex-1 flex flex-col items-center justify-center">
-            <div className="space-y-6 p-8 text-center md:p-10 w-full">
+            <div className="min-h-full space-y-6 p-8 text-center md:p-10 w-full">
               <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-50">
                 <CheckCircle2 className="h-12 w-12 text-emerald-600" />
               </div>
@@ -227,9 +227,9 @@ export function LeadCaptureScreen() {
       backLabel={selectedProducts.length === 2 ? "Back to comparison" : "Back to product"}
       transparentMain={true}
     >
-      <div className="mx-auto max-w-5xl flex flex-col min-h-full">
+      <div className="mx-auto w-full max-w-6xl min-h-full flex flex-col">
         <GlowCard customSize className="w-full flex-1 flex flex-col">
-          <div className="p-8 md:p-12 space-y-6">
+          <div className="min-h-full p-8 md:p-12 space-y-6">
             <div className="space-y-3">
               <div className="inline-flex items-center rounded-full bg-[#2563eb]/8 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#2563eb]">
                 Contact store personnel
