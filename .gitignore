@@ -1,0 +1,30 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Converse reference (large zip + source)
+converse-ref/
+
+# Python
+reco-backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Product PDFs
+lenovo_products/
+
+# Build artifacts
+.handoff/
+
+# Nested git
+Reco-Frontend/.git/

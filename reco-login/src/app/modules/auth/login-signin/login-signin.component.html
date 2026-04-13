@@ -1,0 +1,100 @@
+<div class="login-page">
+  <div class="login-container">
+
+    <!-- Reco Brand Header -->
+    <div class="login-header">
+      <div class="brand-logo">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="40" height="40" rx="8" fill="#1a73e8"/>
+          <text x="50%" y="55%" dominant-baseline="central" text-anchor="middle" fill="white" font-size="18" font-weight="700" font-family="Inter, sans-serif">R</text>
+        </svg>
+      </div>
+      <h1 class="brand-title">Welcome to Bsharp Reco</h1>
+      <p class="brand-subtitle">Sign in to your account</p>
+    </div>
+
+    <!-- Login Form Card -->
+    <div class="login-card">
+
+      <!-- Error Message Banner -->
+      <div class="error-banner" *ngIf="errorMessage">
+        <svg class="error-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 4.5h1.5v4h-1.5v-4zm.75 6.75a.75.75 0 110-1.5.75.75 0 010 1.5z"/>
+        </svg>
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <!-- Email Step -->
+      <div class="form-group" *ngIf="!showPasswordField">
+        <label class="form-label" for="email">Email address</label>
+        <input
+          id="email"
+          type="email"
+          class="form-input"
+          [class.input-error]="emailFormControl.touched && emailFormControl.hasError('email')"
+          placeholder="you@company.com"
+          [(ngModel)]="userMailId"
+          [formControl]="emailFormControl"
+          (keydown)="onEmailKeydown($event)"
+          autocomplete="email"
+          autofocus
+        />
+        <div class="field-error" *ngIf="emailFormControl.touched && emailFormControl.hasError('email')">
+          Please enter a valid email address.
+        </div>
+
+        <button
+          class="btn btn-primary"
+          (click)="checkUserStatus()"
+          [disabled]="isLoading || !userMailId || emailFormControl.hasError('email')"
+        >
+          <span *ngIf="!isLoading">Continue</span>
+          <span *ngIf="isLoading" class="spinner-container">
+            <span class="spinner"></span>
+            <span>Checking...</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Password Step -->
+      <div class="form-group" *ngIf="showPasswordField">
+        <div class="email-display">
+          <span class="email-display-text">{{ userMailId }}</span>
+          <button class="btn-link" (click)="resetToEmail()">Change</button>
+        </div>
+
+        <label class="form-label" for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          class="form-input"
+          placeholder="Enter your password"
+          [(ngModel)]="userPassword"
+          [formControl]="passwordFormControl"
+          (keydown)="onPasswordKeydown($event)"
+          autocomplete="current-password"
+          autofocus
+        />
+
+        <button
+          class="btn btn-primary"
+          (click)="loginUser()"
+          [disabled]="isLoading || !userPassword"
+        >
+          <span *ngIf="!isLoading">Sign In</span>
+          <span *ngIf="isLoading" class="spinner-container">
+            <span class="spinner"></span>
+            <span>Signing in...</span>
+          </span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="login-footer">
+      <p>&copy; {{ currentYear }} Bsharp Learning. All rights reserved.</p>
+    </div>
+
+  </div>
+</div>
