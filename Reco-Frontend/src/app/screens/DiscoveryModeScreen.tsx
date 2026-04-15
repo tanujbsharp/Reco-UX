@@ -24,7 +24,9 @@ export function DiscoveryModeScreen() {
     resetJourneyProgress,
     setJourneyEntryMode,
     setDiscoveryMode,
+    customerInfo,
   } = useJourney();
+  const firstName = customerInfo.name.trim().split(/\s+/)[0] || "there";
 
   useEffect(() => {
     if (!sessionId) {
@@ -117,6 +119,9 @@ export function DiscoveryModeScreen() {
             Powered by AI
           </div>
           <h1 className="text-5xl font-semibold tracking-tight text-slate-950 md:text-6xl">
+            <span className="mb-2 block text-3xl font-medium text-slate-600 md:text-4xl">
+              Welcome, {firstName}
+            </span>
             Find your perfect PC
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-8 text-slate-600">

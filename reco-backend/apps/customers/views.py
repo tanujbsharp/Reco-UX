@@ -54,7 +54,7 @@ def capture_customer(request):
         cmid=session.cmid,
         outlet_id=session.outlet_id,
         name=data['name'],
-        phone=data['phone'],
+        phone=data.get('phone', ''),
         email=data.get('email'),
         consent_given=data['consent_given'],
     )

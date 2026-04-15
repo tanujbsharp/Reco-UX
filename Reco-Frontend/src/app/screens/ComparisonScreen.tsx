@@ -11,6 +11,7 @@ import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
 import { ProductChatWidget } from "../components/ProductChatWidget";
 import { compareProducts } from "../services/comparisonApi";
+import { sanitizeCustomerFacingList } from "../utils/customerCopy";
 
 const chipScoreMap: Record<string, number> = {
   "Intel Core Ultra 7": 1,
@@ -50,6 +51,26 @@ function parseMetric(value: string) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function winnerIdByHigherMetric(
+  leftValue: number,
+  rightValue: number,
+  leftId: string,
+  rightId: string,
+) {
+  if (leftValue === rightValue) return null;
+  return leftValue > rightValue ? leftId : rightId;
+}
+
+function winnerIdByLowerMetric(
+  leftValue: number,
+  rightValue: number,
+  leftId: string,
+  rightId: string,
+) {
+  if (leftValue === rightValue) return null;
+  return leftValue < rightValue ? leftId : rightId;
+}
+
 function fallbackVisualForProduct(productId: string) {
   const numericId = Number.parseInt(productId, 10);
   const safeIndex = Number.isNaN(numericId) ? 0 : numericId % mockProducts.length;
@@ -58,10 +79,10 @@ function fallbackVisualForProduct(productId: string) {
 
 function resolveImplications(product: (typeof mockProducts)[number]) {
   if (product.implications.length > 0) {
-    return product.implications;
+    return sanitizeCustomerFacingList(product.implications).slice(0, 4);
   }
 
-  return [...product.matchedBenefits, ...product.tradeOffs].filter(Boolean).slice(0, 4);
+  return sanitizeCustomerFacingList([...product.matchedBenefits, ...product.tradeOffs]).slice(0, 4);
 }
 
 export function ComparisonScreen() {
@@ -119,19 +140,26 @@ export function ComparisonScreen() {
   const rightImage = hasRenderableValue(rightProduct.image) ? rightProduct.image : rightFallbackVisual.image;
   const leftImplications = resolveImplications(leftProduct);
   const rightImplications = resolveImplications(rightProduct);
-  const betterCarryProduct =
-    parseMetric(leftProduct.weight) <= parseMetric(rightProduct.weight)
-      ? leftProduct
-      : rightProduct;
-  const betterPowerProduct =
-    overallPowerScore(leftProduct) >= overallPowerScore(rightProduct)
-      ? leftProduct
-      : rightProduct;
-  const betterDeskProduct =
-    parseMetric(leftProduct.screenSize) >= parseMetric(rightProduct.screenSize)
-      ? leftProduct
-      : rightProduct;
-  const betterValueProduct = leftProduct.price <= rightProduct.price ? leftProduct : rightProduct;
+  const carryWinnerId = winnerIdByLowerMetric(
+    parseMetric(leftProduct.weight),
+    parseMetric(rightProduct.weight),
+    leftProduct.id,
+    rightProduct.id,
+  );
+  const powerWinnerId = winnerIdByHigherMetric(
+    overallPowerScore(leftProduct),
+    overallPowerScore(rightProduct),
+    leftProduct.id,
+    rightProduct.id,
+  );
+  const deskWinnerId = winnerIdByHigherMetric(
+    parseMetric(leftProduct.screenSize),
+    parseMetric(rightProduct.screenSize),
+    leftProduct.id,
+    rightProduct.id,
+  );
+  const betterCarryProduct = carryWinnerId === rightProduct.id ? rightProduct : leftProduct;
+  const betterPowerProduct = powerWinnerId === rightProduct.id ? rightProduct : leftProduct;
   const carryImplication =
     betterCarryProduct.implications[0] ||
     "It is the lighter carry, so it wins if you move around often or work away from a desk.";
@@ -143,24 +171,18 @@ export function ComparisonScreen() {
     `Choose it if you value flexibility and fewer future compromises. Pick ${betterCarryProduct.model} if effortless carry matters more.`;
 
   const baseRows = [
-    {
-      label: "Price",
-      left: leftProduct.price > 0 ? `₹${leftProduct.price.toLocaleString()}` : "",
-      right: rightProduct.price > 0 ? `₹${rightProduct.price.toLocaleString()}` : "",
-      winner: betterValueProduct.id,
-    },
     { label: "Chip", left: leftProduct.chip, right: rightProduct.chip },
-    { label: "Graphics", left: leftProduct.graphics, right: rightProduct.graphics, winner: betterPowerProduct.id },
+    { label: "Graphics", left: leftProduct.graphics, right: rightProduct.graphics, winner: powerWinnerId ?? undefined },
     { label: "Memory", left: leftProduct.memory, right: rightProduct.memory },
     { label: "Storage", left: leftProduct.storage, right: rightProduct.storage },
-    { label: "Display", left: leftProduct.display, right: rightProduct.display, winner: betterDeskProduct.id },
+    { label: "Display", left: leftProduct.display, right: rightProduct.display, winner: deskWinnerId ?? undefined },
     { label: "Battery", left: leftProduct.batteryLife, right: rightProduct.batteryLife },
-    { label: "Weight", left: leftProduct.weight, right: rightProduct.weight, winner: betterCarryProduct.id },
+    { label: "Weight", left: leftProduct.weight, right: rightProduct.weight, winner: carryWinnerId ?? undefined },
     { label: "Ports", left: leftProduct.ports, right: rightProduct.ports },
   ];
   const optionalRows = [
     { label: "Noise profile", left: leftProduct.noiseLevel, right: rightProduct.noiseLevel },
-    { label: "Performance tier", left: leftProduct.performanceTier, right: rightProduct.performanceTier, winner: betterPowerProduct.id },
+    { label: "Performance tier", left: leftProduct.performanceTier, right: rightProduct.performanceTier, winner: powerWinnerId ?? undefined },
   ];
   const compareRows = [
     ...baseRows.filter((row) => hasRenderableValue(row.left) || hasRenderableValue(row.right)),

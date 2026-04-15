@@ -9,6 +9,7 @@ import { Badge } from "../components/ui/badge";
 import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
+import { sanitizeCustomerFacingText } from "../utils/customerCopy";
 
 export function ShareSaveScreen() {
   const navigate = useNavigate();
@@ -39,7 +40,14 @@ export function ShareSaveScreen() {
     ? `Your Bsharp Reco selections: ${activeProducts.map(p => p.model).join(" & ")}`
     : `Your Bsharp Reco selection: ${activeProducts[0].model}`;
 
-  const emailBody = `Hi ${customerInfo.name || "there"},\n\nHere ${activeProducts.length > 1 ? "are the PC recommendations" : "is the PC recommendation"} prepared for you at Bsharp Reco.\n\n${activeProducts.map((p, idx) => `${idx + 1}. ${p.model}\n   Why it fits: ${p.fitSummary}\n   Price: ₹${p.price.toLocaleString()}\n   Best for: ${p.bestFor}`).join("\n\n")}\n\nIf you would like, a store associate can walk you through the trade-offs in person.`;
+  const emailBody = `Hi ${customerInfo.name || "there"},\n\nHere ${activeProducts.length > 1 ? "are the PC recommendations" : "is the PC recommendation"} prepared for you at Bsharp Reco.\n\n${activeProducts.map((p, idx) => {
+    const fitSummary = sanitizeCustomerFacingText(p.fitSummary);
+    return [
+      `${idx + 1}. ${p.model}`,
+      fitSummary ? `   Why it fits: ${fitSummary}` : "",
+      `   Best for: ${p.bestFor}`,
+    ].filter(Boolean).join("\n");
+  }).join("\n\n")}\n\nIf you would like, a store associate can walk you through the trade-offs in person.`;
 
   const commentary = (
     <div className="space-y-4">
@@ -127,12 +135,16 @@ export function ShareSaveScreen() {
                               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{p.family}</div>
                               <h3 className="text-xl font-semibold text-slate-950">{p.model}</h3>
                             </div>
-                            <div className="text-right">
-                              <div className="text-xl font-semibold text-slate-950">₹{p.price.toLocaleString()}</div>
-                              <div className="text-sm text-slate-500">{p.emiFrom}</div>
-                            </div>
+                            <Badge
+                              variant="outline"
+                              className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-slate-600"
+                            >
+                              {p.bestFor}
+                            </Badge>
                           </div>
-                          <p className="text-sm leading-6 text-slate-600">{p.fitSummary}</p>
+                          {sanitizeCustomerFacingText(p.fitSummary) && (
+                            <p className="text-sm leading-6 text-slate-600">{sanitizeCustomerFacingText(p.fitSummary)}</p>
+                          )}
                           <div className="flex flex-wrap gap-2">
                             {p.keyHighlights.map((item) => (
                               <Badge key={item} variant="outline" className="rounded-full border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">

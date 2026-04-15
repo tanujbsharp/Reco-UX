@@ -422,10 +422,12 @@ export function RecommendationsScreen() {
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <div className="text-2xl font-semibold text-slate-950">₹{product.price.toLocaleString()}</div>
-                            <div className="text-xs text-slate-500">{product.emiFrom}</div>
-                          </div>
+                          <Badge
+                            variant="outline"
+                            className="rounded-full border-slate-200 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600"
+                          >
+                            {product.bestFor || "Recommended fit"}
+                          </Badge>
                         </div>
 
                         {/* Match score bar */}

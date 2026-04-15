@@ -33,7 +33,7 @@ export function ConsentScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const isComplete = formData.name.trim() && formData.phone.trim() && consentChecked;
+  const isComplete = formData.name.trim() && consentChecked;
 
   const commentary = (
     <div className="space-y-4">
@@ -97,7 +97,9 @@ export function ConsentScreen() {
 
                 <div className="grid gap-3.5">
                   <div className="grid max-w-xl grid-cols-[100px_1fr] items-center gap-3">
-                    <Label htmlFor="customer-name" className="text-base font-semibold text-slate-900 text-left">Name</Label>
+                    <Label htmlFor="customer-name" className="text-base font-semibold text-slate-900 text-left">
+                      Name <span className="text-rose-500">*</span>
+                    </Label>
                     <Input
                       id="customer-name"
                       value={formData.name}
@@ -108,7 +110,10 @@ export function ConsentScreen() {
                   </div>
 
                   <div className="grid max-w-xl grid-cols-[100px_1fr] items-center gap-3">
-                    <Label htmlFor="customer-phone" className="text-base font-semibold text-slate-900 text-left">Phone</Label>
+                    <Label htmlFor="customer-phone" className="text-base font-semibold text-slate-900 text-left leading-5">
+                      Phone{" "}
+                      <span className="font-normal text-slate-400 text-[11px]">(optional)</span>
+                    </Label>
                     <div className="flex gap-2">
                       <div className="flex h-11 min-w-[60px] items-center justify-center rounded-2xl border border-slate-200 bg-black/5 text-sm font-medium text-slate-700">
                         +91

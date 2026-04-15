@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Check, CheckCheck, Edit2, Keyboard, Mic, X } from "lucide-react";
+import { Check, CheckCheck, Edit2, Keyboard, Loader2, Mic, Plus, X } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
@@ -11,6 +11,36 @@ import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { submitAnswer } from "../services/questionApi";
 import { cn } from "../components/ui/utils";
+import { analyzeText } from "../services/voiceApi";
+
+function fallbackTagCategory(text: string) {
+  const value = text.toLowerCase();
+
+  if (/game|gaming|edit|video|render|code|coding|developer|office|study|school|college|business|work|travel/.test(value)) {
+    return "usage";
+  }
+  if (/battery|hour|hr|light|thin|portable|weight|kg|screen|display|keyboard|touch|port|usb|hdmi|ram|memory|ssd|storage|graphics|gpu|processor|cpu|chip/.test(value)) {
+    return "feature";
+  }
+  if (/budget|price|cost|emi|cheap|affordable|under|below|lakh|₹|rs/.test(value)) {
+    return "budget";
+  }
+  if (/fast|performance|powerful|smooth|speed|multitask|heavy/.test(value)) {
+    return "performance";
+  }
+  if (/quiet|silent|fan|noise|heat|cool/.test(value)) {
+    return "comfort";
+  }
+
+  return "preference";
+}
+
+function splitManualTagInput(text: string) {
+  return text
+    .split(/\s*(?:,|;|\+|&|\band\b|\balso\b|\bplus\b)\s*/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
 
 export function VoiceResultsScreen() {
   const navigate = useNavigate();
@@ -18,6 +48,9 @@ export function VoiceResultsScreen() {
   const [tags, setTags] = useState(voiceTags);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [newTagText, setNewTagText] = useState("");
+  const [isAddingTag, setIsAddingTag] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
 
   const [hoveredTagId, setHoveredTagId] = useState<string | null>(null);
 
@@ -46,6 +79,91 @@ export function VoiceResultsScreen() {
     setEditingId(null);
     setEditValue("");
   };
+
+  const handleAddTag = async () => {
+    const text = newTagText.trim();
+    if (!text) {
+      return;
+    }
+
+    setIsAddingTag(true);
+    setTagError(null);
+    let nextTags = splitManualTagInput(text).map((part, index) => ({
+      id: `manual-${Date.now()}-${index}`,
+      text: part,
+      category: fallbackTagCategory(part),
+    }));
+
+    try {
+      const result = await analyzeText(text);
+      const analyzedTags = (result.tags ?? [])
+        .map((tag, index) => ({
+          id: `manual-${Date.now()}-${index}`,
+          text: tag.tag?.trim(),
+          category: tag.category || fallbackTagCategory(tag.tag ?? ""),
+        }))
+        .filter((tag) => tag.text);
+
+      if (analyzedTags.length > 0) {
+        nextTags = analyzedTags;
+      }
+    } catch (err) {
+      console.error("Failed to auto-categorize tag, using fallback:", err);
+      setTagError("Could not reach the server, so we categorized it locally.");
+    }
+
+    setTags((current) => [...current, ...nextTags]);
+    setNewTagText("");
+    setIsAddingTag(false);
+  };
+
+  const handleContinue = async () => {
+    setVoiceTags(tags);
+    // Save confirmed tags + discovery text to backend session
+    // so the LLM question orchestrator can use them
+    if (sessionId) {
+      const tagSummary = tags.map((t) => `${t.category}: ${t.text}`).join(", ");
+      try {
+        await submitAnswer(sessionId, {
+          question_text: "Customer discovery brief",
+          answer_value: tagSummary ? `${discoveryText} | Tags: ${tagSummary}` : discoveryText,
+          from_voice: true,
+          score_effect: {
+            discovery_mode: discoveryMode,
+            discovery_text: discoveryText,
+            tags: tags.map((tag) => ({
+              text: tag.text,
+              category: tag.category,
+            })),
+          },
+        });
+      } catch (err) {
+        console.error("Failed to save tags to backend:", err);
+      }
+    }
+    navigate("/questions");
+  };
+
+  const renderResultActions = () => (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Button
+        variant="outline"
+        size="lg"
+        onClick={() => navigate("/voice-discovery")}
+        className="h-12 rounded-full border-slate-200 bg-white px-6"
+      >
+        {discoveryMode === "voice" ? "Speak again" : "Edit note"}
+      </Button>
+      <Button
+        size="lg"
+        disabled={!discoveryText.trim() && tags.length === 0}
+        onClick={() => void handleContinue()}
+        className="h-12 rounded-full bg-[#2563eb] px-7 text-white hover:bg-[#1d4ed8]"
+      >
+        Looks good, continue
+      </Button>
+    </div>
+  );
 
   const commentary = (
     <div className="space-y-4">
@@ -94,6 +212,8 @@ export function VoiceResultsScreen() {
           </motion.div>
 
           <div className="space-y-6">
+              {renderResultActions()}
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-semibold text-slate-950">Detected preferences</h2>
@@ -197,48 +317,41 @@ export function VoiceResultsScreen() {
                 ))}
               </div>
 
+              <div className="rounded-[26px] border border-dashed border-slate-300 bg-white/75 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-slate-900">Add another preference</div>
+                    <p className="mt-1 text-sm text-slate-500">Type a missing need and we&apos;ll categorize it automatically.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      value={newTagText}
+                      onChange={(event) => setNewTagText(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          void handleAddTag();
+                        }
+                      }}
+                      placeholder="Example: long battery life"
+                      className="h-11 min-w-[260px] rounded-2xl border-slate-200 bg-white"
+                      disabled={isAddingTag}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void handleAddTag()}
+                      disabled={!newTagText.trim() || isAddingTag}
+                      className="h-11 rounded-full bg-[#2563eb] px-5 text-white hover:bg-[#1d4ed8]"
+                    >
+                      {isAddingTag ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      Add tag
+                    </Button>
+                  </div>
+                </div>
+                {tagError && <p className="mt-3 text-sm text-amber-600">{tagError}</p>}
+              </div>
+
               <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => navigate("/voice-discovery")}
-                  className="h-12 rounded-full border-slate-200 bg-white px-6"
-                >
-                  {discoveryMode === "voice" ? "Speak again" : "Edit note"}
-                </Button>
-                <Button
-                  size="lg"
-                  disabled={!discoveryText.trim() && tags.length === 0}
-                  onClick={async () => {
-                    setVoiceTags(tags);
-                    // Save confirmed tags + discovery text to backend session
-                    // so the LLM question orchestrator can use them
-                    if (sessionId) {
-                      const tagSummary = tags.map((t) => `${t.category}: ${t.text}`).join(", ");
-                      try {
-                        await submitAnswer(sessionId, {
-                          question_text: "Customer discovery brief",
-                          answer_value: tagSummary ? `${discoveryText} | Tags: ${tagSummary}` : discoveryText,
-                          from_voice: true,
-                          score_effect: {
-                            discovery_mode: discoveryMode,
-                            discovery_text: discoveryText,
-                            tags: tags.map((tag) => ({
-                              text: tag.text,
-                              category: tag.category,
-                            })),
-                          },
-                        });
-                      } catch (err) {
-                        console.error("Failed to save tags to backend:", err);
-                      }
-                    }
-                    navigate("/questions");
-                  }}
-                  className="h-12 rounded-full bg-[#2563eb] px-7 text-white hover:bg-[#1d4ed8]"
-                >
-                  Looks good, continue
-                </Button>
+                {renderResultActions()}
               </div>
               </div>
             </div>

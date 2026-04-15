@@ -26,6 +26,6 @@ class CustomerProfileCreateSerializer(serializers.Serializer):
     """
     session_id = serializers.IntegerField()
     name = serializers.CharField(max_length=255)
-    phone = serializers.CharField(max_length=20)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
     email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
     consent_given = serializers.BooleanField(default=False)

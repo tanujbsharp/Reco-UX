@@ -9,6 +9,10 @@ import { getTagColor } from "../utils/tagColors";
 
 const orbitDurations = [5.5, 7.5, 9.5];
 
+function formatCapturedText(value: string | undefined) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
 export function ProcessingScreen({ autoRedirect = true }: { autoRedirect?: boolean }) {
   const navigate = useNavigate();
   const { answers, voiceTags } = useJourney();
@@ -36,21 +40,26 @@ export function ProcessingScreen({ autoRedirect = true }: { autoRedirect?: boole
         <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-500">Inputs captured</h4>
         <div className="mt-4 space-y-2.5">
           {voiceTags.map((tag) => (
-            <div key={tag.id} className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white/70 px-4 py-3 text-sm">
+            <div key={tag.id} className="rounded-2xl border border-blue-100 bg-white/70 px-4 py-3">
+              <div className="mb-2 text-sm font-semibold text-blue-900">
+                {formatCapturedText(tag.category.replace("-", " "))}
+              </div>
               <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${getTagColor(tag.text)}`}>
-                {tag.text}
+                {formatCapturedText(tag.text)}
               </span>
             </div>
           ))}
           {answers.map((answer) => {
             const value = Array.isArray(answer.value) ? answer.value.join(", ") : answer.value;
+            const question = formatCapturedText(answer.questionText ?? answer.questionId);
+            const answerText = formatCapturedText(value);
 
             return (
-              <div key={answer.questionId} className="rounded-2xl border border-blue-100 bg-white/70 px-4 py-3 text-sm">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-400">
-                  {answer.questionText ?? answer.questionId}
+              <div key={answer.questionId} className="rounded-2xl border border-blue-100 bg-white/70 px-4 py-3">
+                <div className="text-sm font-medium leading-5 text-slate-600">
+                  {question}
                 </div>
-                <div className="mt-1 font-medium text-blue-900">{value}</div>
+                <div className="mt-2 text-sm font-semibold leading-5 text-blue-900">{answerText}</div>
               </div>
             );
           })}

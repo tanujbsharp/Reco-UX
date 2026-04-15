@@ -4,6 +4,9 @@ const CUSTOMER_FIT_FRAGMENT_PATTERNS = [
   /\b\d+(?:\.\d+)?%?\s*fit(?:\s*score)?\b/gi,
 ];
 
+const PRICING_REFERENCE_PATTERN =
+  /(?:₹|\brs\.?\b|\binr\b|\bprice\b|\bpriced\b|\bpricing\b|\bcost\b|\bcosts\b|\bbudget\b|\bemi\b|\bmonthly payment\b|\baffordable\b|\bexpensive\b|\bcheap\b|\blakh\b)/i;
+
 export function sanitizeCustomerFacingText(value: unknown) {
   if (typeof value !== "string") {
     return "";
@@ -11,6 +14,10 @@ export function sanitizeCustomerFacingText(value: unknown) {
 
   let text = value.trim();
   if (!text) {
+    return "";
+  }
+
+  if (PRICING_REFERENCE_PATTERN.test(text)) {
     return "";
   }
 

@@ -123,7 +123,7 @@ function buildCustomerTalkingPoints(product: Product | null | undefined) {
     ].filter(hasText),
   );
 
-  return candidates.map(toCustomerFacingPoint).slice(0, 3);
+  return sanitizeCustomerFacingList(candidates.map(toCustomerFacingPoint)).slice(0, 3);
 }
 
 function mergeProducts(fallback: Product, incoming: Product): Product {
@@ -320,8 +320,14 @@ export function ProductDetailScreen() {
     [product?.batteryHours, product?.chip, product?.display, product?.graphics, product?.memory, product?.storage, product?.weight],
   );
   const talkingPoints = useMemo(() => buildCustomerTalkingPoints(product), [product]);
-  const strengths = product?.pros.length ? product.pros : product?.matchedBenefits ?? [];
-  const considerations = product?.cons.length ? product.cons : product?.tradeOffs ?? [];
+  const strengths = useMemo(
+    () => sanitizeCustomerFacingList(product?.pros.length ? product.pros : product?.matchedBenefits ?? []),
+    [product?.matchedBenefits, product?.pros],
+  );
+  const considerations = useMemo(
+    () => sanitizeCustomerFacingList(product?.cons.length ? product.cons : product?.tradeOffs ?? []),
+    [product?.cons, product?.tradeOffs],
+  );
   const comparedAgainst = product
     ? productCatalog.find((item) => item.id === selectedProducts.find((selectedId) => selectedId !== product.id))
     : undefined;
@@ -485,13 +491,6 @@ export function ProductDetailScreen() {
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-slate-200 bg-white/90 px-5 py-4 text-right">
-                <div className="text-sm text-slate-500">Starting at</div>
-                <div className="text-3xl font-semibold text-slate-950">
-                  ₹{product.price.toLocaleString()}
-                </div>
-                <div className="text-sm text-slate-500">{product.emiFrom}</div>
-              </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr] items-stretch">

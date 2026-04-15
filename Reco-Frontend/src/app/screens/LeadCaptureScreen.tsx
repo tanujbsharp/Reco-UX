@@ -20,6 +20,7 @@ import { Badge } from "../components/ui/badge";
 import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
+import { sanitizeCustomerFacingText } from "../utils/customerCopy";
 
 export function LeadCaptureScreen() {
   const navigate = useNavigate();
@@ -277,14 +278,9 @@ export function LeadCaptureScreen() {
                           </div>
                           <h2 className="mt-1 text-2xl font-semibold text-slate-950">{p.model}</h2>
                         </div>
-                        <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
-                          <div className="text-sm text-slate-500">Price</div>
-                          <div className="mt-1 text-2xl font-semibold text-slate-950">
-                            ₹{p.price.toLocaleString()}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-500">{p.emiFrom}</div>
-                        </div>
-                        <p className="text-sm leading-6 text-slate-600">{p.fitSummary}</p>
+                        {sanitizeCustomerFacingText(p.fitSummary) && (
+                          <p className="text-sm leading-6 text-slate-600">{sanitizeCustomerFacingText(p.fitSummary)}</p>
+                        )}
                       </div>
                     </div>
                   </motion.div>

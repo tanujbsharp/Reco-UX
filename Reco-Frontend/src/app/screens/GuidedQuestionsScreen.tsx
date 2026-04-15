@@ -11,13 +11,16 @@ import {
   BriefcaseBusiness,
   Cable,
   Check,
+  CheckCircle2,
   CircleHelp,
   Clapperboard,
   Code2,
   Feather,
   Gauge,
   Laptop2,
+  Loader2,
   MemoryStick,
+  Mic,
   Monitor,
   MonitorSpeaker,
   MonitorUp,
@@ -39,6 +42,7 @@ import { Textarea } from "../components/ui/textarea";
 import { mockCommentary, mockQuestions, Question, QuestionOption } from "../data/mockData";
 import { Answer, useJourney } from "../context/JourneyContext";
 import { getFirstQuestion, submitAnswer as submitAnswerApi } from "../services/questionApi";
+import { transcribeAudio } from "../services/voiceApi";
 
 const iconMap = {
   BookOpen,
@@ -68,6 +72,21 @@ const iconMap = {
 
 const additionalSpecsQuestionId = "q-additional-specs";
 const additionalSpecsQuestionText = "Any additional specifications, must-haves, or deal-breakers we should factor in?";
+const preferredAudioMimeTypes = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+] as const;
+
+function selectSupportedAudioMimeType() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+    return "";
+  }
+
+  return preferredAudioMimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
 
 function optionMatchesTag(option: QuestionOption, value: string) {
   const normalizedOption = option.label.toLowerCase();
@@ -107,8 +126,14 @@ export function GuidedQuestionsScreen() {
   const [selectedValue, setSelectedValue] = useState<string | string[] | null>(null);
   const [otherText, setOtherText] = useState("");
   const [additionalSpecs, setAdditionalSpecs] = useState("");
+  const [additionalSpecsFromVoice, setAdditionalSpecsFromVoice] = useState(false);
+  const [additionalVoiceState, setAdditionalVoiceState] = useState<"idle" | "recording" | "transcribing">("idle");
+  const [additionalVoiceError, setAdditionalVoiceError] = useState<string | null>(null);
   const [showAdditionalSpecsStep, setShowAdditionalSpecsStep] = useState(false);
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
+  const additionalMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const additionalMediaStreamRef = useRef<MediaStream | null>(null);
+  const additionalAudioChunksRef = useRef<Blob[]>([]);
   const directGuidedEntry = journeyEntryMode === "guided";
   const shouldUseGeneralQuestions = directGuidedEntry || !sessionId;
 
@@ -245,6 +270,13 @@ export function GuidedQuestionsScreen() {
       if (autoAdvanceTimeoutRef.current) {
         window.clearTimeout(autoAdvanceTimeoutRef.current);
       }
+      if (
+        additionalMediaRecorderRef.current &&
+        additionalMediaRecorderRef.current.state !== "inactive"
+      ) {
+        additionalMediaRecorderRef.current.stop();
+      }
+      additionalMediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -315,6 +347,7 @@ export function GuidedQuestionsScreen() {
     }
 
     setAdditionalSpecs(existingAdditionalSpecsAnswer ? formatAnswerValue(existingAdditionalSpecsAnswer) : "");
+    setAdditionalSpecsFromVoice(Boolean(existingAdditionalSpecsAnswer?.fromVoice));
   }, [existingAdditionalSpecsAnswer, showAdditionalSpecsStep]);
 
   const answersSummary = useMemo(() => {
@@ -406,10 +439,97 @@ export function GuidedQuestionsScreen() {
         questionId: additionalSpecsQuestionId,
         questionText: additionalSpecsQuestionText,
         value: trimmed,
-        fromVoice: false,
+        fromVoice: additionalSpecsFromVoice,
       } satisfies Answer,
       answerText: trimmed,
     };
+  };
+
+  const stopAdditionalMediaStream = () => {
+    additionalMediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    additionalMediaStreamRef.current = null;
+  };
+
+  const stopAdditionalRecording = () => {
+    if (
+      additionalMediaRecorderRef.current &&
+      additionalMediaRecorderRef.current.state !== "inactive"
+    ) {
+      additionalMediaRecorderRef.current.stop();
+      return;
+    }
+
+    stopAdditionalMediaStream();
+    setAdditionalVoiceState("idle");
+  };
+
+  const startAdditionalRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setAdditionalVoiceError("Voice capture is not supported in this browser. Please type your note instead.");
+      return;
+    }
+
+    additionalAudioChunksRef.current = [];
+    setAdditionalVoiceError(null);
+    setAdditionalVoiceState("recording");
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = selectSupportedAudioMimeType();
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+      additionalMediaStreamRef.current = stream;
+      additionalMediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          additionalAudioChunksRef.current.push(event.data);
+        }
+      });
+
+      mediaRecorder.addEventListener("stop", async () => {
+        stopAdditionalMediaStream();
+        additionalMediaRecorderRef.current = null;
+        const audioBlob = new Blob(additionalAudioChunksRef.current, {
+          type: mediaRecorder.mimeType || mimeType || "audio/webm",
+        });
+
+        if (!audioBlob.size) {
+          setAdditionalVoiceState("idle");
+          setAdditionalVoiceError("No audio was captured. Please try again.");
+          return;
+        }
+
+        setAdditionalVoiceState("transcribing");
+
+        try {
+          const result = await transcribeAudio(audioBlob);
+          const transcript = result.transcript?.trim();
+          if (!transcript) {
+            setAdditionalVoiceError("We couldn't detect any speech. Please try again.");
+            return;
+          }
+
+          setAdditionalSpecs((current) => {
+            const prefix = current.trim() ? `${current.trim()}\n` : "";
+            return `${prefix}${transcript}`;
+          });
+          setAdditionalSpecsFromVoice(true);
+        } catch (error) {
+          console.error("Additional specs transcription failed:", error);
+          setAdditionalVoiceError("We couldn't transcribe that recording. Please try again or type your note.");
+        } finally {
+          setAdditionalVoiceState("idle");
+        }
+      });
+
+      mediaRecorder.start();
+    } catch (error) {
+      console.error("Additional specs microphone access failed:", error);
+      stopAdditionalMediaStream();
+      setAdditionalVoiceState("idle");
+      setAdditionalVoiceError("Microphone access was blocked. Allow microphone access or type your note.");
+    }
   };
 
   const persistPreparedAnswer = async (
@@ -687,8 +807,8 @@ export function GuidedQuestionsScreen() {
           ) : (
             answersSummary.map((entry) => (
               <div key={entry.id} className="rounded-2xl border border-emerald-100 bg-white/70 p-4">
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-600">{entry.question}</div>
-                <div className="mt-2 text-sm font-bold text-emerald-900 break-all">{entry.value}</div>
+                <div className="text-sm font-medium leading-5 text-slate-600">{entry.question}</div>
+                <div className="mt-2 text-sm font-semibold leading-5 text-emerald-900 break-words">{entry.value}</div>
                 {entry.fromVoice && (
                   <div className="mt-2 text-xs font-semibold text-emerald-700">Prefilled from the discovery input</div>
                 )}
@@ -829,11 +949,79 @@ export function GuidedQuestionsScreen() {
 
                   <Textarea
                     value={additionalSpecs}
-                    onChange={(event) => setAdditionalSpecs(event.target.value)}
+                    onChange={(event) => {
+                      setAdditionalSpecs(event.target.value);
+                      setAdditionalSpecsFromVoice(false);
+                    }}
                     placeholder="Example: I use an external monitor, need strong keyboard comfort, prefer quieter fans, or I sometimes play Valorant."
                     className="min-h-[220px] rounded-[28px] border-slate-200 bg-white/95 p-6 text-base leading-7"
-                    disabled={isSubmittingAnswer}
+                    disabled={isSubmittingAnswer || additionalVoiceState === "transcribing"}
                   />
+                  <div className="flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-white/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">Prefer speaking this note?</div>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Record a short note and we&apos;ll transcribe it into the box above.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant={additionalVoiceState === "recording" ? "outline" : "default"}
+                      disabled={isSubmittingAnswer || additionalVoiceState === "transcribing"}
+                      onClick={() => {
+                        if (additionalVoiceState === "recording") {
+                          stopAdditionalRecording();
+                        } else {
+                          void startAdditionalRecording();
+                        }
+                      }}
+                      className={
+                        additionalVoiceState === "recording"
+                          ? "h-11 rounded-full border-rose-200 bg-rose-50 px-5 text-rose-700 hover:bg-rose-100"
+                          : "h-11 rounded-full bg-[#2563eb] px-5 text-white hover:bg-[#1d4ed8]"
+                      }
+                    >
+                      {additionalVoiceState === "transcribing" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : additionalVoiceState === "recording" ? (
+                        <span className="flex h-5 items-center gap-0.5" aria-hidden="true">
+                          {[0, 1, 2, 3, 4].map((bar) => (
+                            <motion.span
+                              key={bar}
+                              animate={{ height: [6, 18, 8, 14, 6] }}
+                              transition={{
+                                duration: 0.75,
+                                repeat: Number.POSITIVE_INFINITY,
+                                delay: bar * 0.08,
+                                ease: "easeInOut",
+                              }}
+                              className="w-1 rounded-full bg-rose-600"
+                            />
+                          ))}
+                        </span>
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                      {additionalVoiceState === "recording"
+                        ? (
+                          <>
+                            Listening
+                            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-rose-700">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Done
+                            </span>
+                          </>
+                        )
+                        : additionalVoiceState === "transcribing"
+                          ? "Transcribing..."
+                          : "Add by voice"}
+                    </Button>
+                  </div>
+                  {additionalVoiceError && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      {additionalVoiceError}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-8">
