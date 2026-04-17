@@ -13,24 +13,41 @@ import { ProductChatWidget } from "../components/ProductChatWidget";
 import { compareProducts } from "../services/comparisonApi";
 import { sanitizeCustomerFacingList } from "../utils/customerCopy";
 
-const chipScoreMap: Record<string, number> = {
-  "Intel Core Ultra 7": 1,
-  "Intel Core Ultra 9": 2,
-  "Intel Core Ultra 9 Pro": 3,
-};
+function chipScore(value: string) {
+  const lower = value.toLowerCase();
+
+  let score = 0;
+  if (/core\s+ultra\s+9|ryzen\s+9|i9/.test(lower)) score = 4;
+  else if (/core\s+ultra\s+7|ryzen\s+7|i7/.test(lower)) score = 3;
+  else if (/core\s+ultra\s+5|ryzen\s+5|i5/.test(lower)) score = 2;
+  else if (/ryzen\s+3|i3/.test(lower)) score = 1;
+
+  if (/\bhx\b/.test(lower)) score += 0.45;
+  else if (/\bhs\b|\bh\b/.test(lower)) score += 0.3;
+  else if (/\bu\b|\bp\b/.test(lower)) score -= 0.15;
+
+  if (/14th|ultra\s+200|8845|8945/.test(lower)) score += 0.15;
+  return Math.max(0, score);
+}
 
 function graphicsScore(value: string) {
   const lower = value.toLowerCase();
-  if (lower.includes("rtx 4060")) return 4;
-  if (lower.includes("rtx 4050")) return 3;
-  if (lower.includes("arc")) return 2;
-  if (lower.includes("iris") || lower.includes("radeon")) return 1.5;
+  if (/rtx\s*4090/.test(lower)) return 9;
+  if (/rtx\s*4080/.test(lower)) return 8;
+  if (/rtx\s*4070/.test(lower)) return 7;
+  if (/rtx\s*4060/.test(lower)) return 6;
+  if (/rtx\s*4050/.test(lower)) return 5;
+  if (/gtx\s*16/.test(lower)) return 3.5;
+  if (lower.includes("radeon 780m")) return 2.4;
+  if (lower.includes("arc")) return 2.2;
+  if (lower.includes("iris")) return 1.6;
+  if (lower.includes("radeon")) return lower.includes("integrated") ? 1.4 : 3;
   if (lower.includes("uhd") || lower.includes("integrated")) return 1;
   return 0;
 }
 
 function overallPowerScore(product: { chip: string; graphics: string }) {
-  return (chipScoreMap[product.chip] ?? 0) + graphicsScore(product.graphics);
+  return chipScore(product.chip) + graphicsScore(product.graphics);
 }
 
 function hasRenderableValue(value: unknown) {
@@ -152,6 +169,18 @@ export function ComparisonScreen() {
     leftProduct.id,
     rightProduct.id,
   );
+  const chipWinnerId = winnerIdByHigherMetric(
+    chipScore(leftProduct.chip),
+    chipScore(rightProduct.chip),
+    leftProduct.id,
+    rightProduct.id,
+  );
+  const graphicsWinnerId = winnerIdByHigherMetric(
+    graphicsScore(leftProduct.graphics),
+    graphicsScore(rightProduct.graphics),
+    leftProduct.id,
+    rightProduct.id,
+  );
   const deskWinnerId = winnerIdByHigherMetric(
     parseMetric(leftProduct.screenSize),
     parseMetric(rightProduct.screenSize),
@@ -171,8 +200,8 @@ export function ComparisonScreen() {
     `Choose it if you value flexibility and fewer future compromises. Pick ${betterCarryProduct.model} if effortless carry matters more.`;
 
   const baseRows = [
-    { label: "Chip", left: leftProduct.chip, right: rightProduct.chip },
-    { label: "Graphics", left: leftProduct.graphics, right: rightProduct.graphics, winner: powerWinnerId ?? undefined },
+    { label: "Chip", left: leftProduct.chip, right: rightProduct.chip, winner: chipWinnerId ?? undefined },
+    { label: "Graphics", left: leftProduct.graphics, right: rightProduct.graphics, winner: graphicsWinnerId ?? undefined },
     { label: "Memory", left: leftProduct.memory, right: rightProduct.memory },
     { label: "Storage", left: leftProduct.storage, right: rightProduct.storage },
     { label: "Display", left: leftProduct.display, right: rightProduct.display, winner: deskWinnerId ?? undefined },

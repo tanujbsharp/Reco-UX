@@ -26,7 +26,9 @@ from collections import defaultdict
 
 from apps.sessions_app.models import CustomerSession, SessionAnswer
 from apps.recommendations.fit_profiles import (
+    build_intent_profile,
     build_requirement_profile,
+    compute_intent_fit,
     compute_right_sized_performance_fit,
     compute_session_value_for_money,
 )
@@ -36,6 +38,18 @@ from apps.recommendations.preference_inference import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _merge_hard_filters(target, incoming):
+    for feature_code, min_value in (incoming or {}).items():
+        try:
+            target[feature_code] = max(
+                float(target.get(feature_code, 0.0) or 0.0),
+                float(min_value),
+            )
+        except (TypeError, ValueError):
+            continue
+    return target
 
 # ---------------------------------------------------------------------------
 # Safe imports — packets models may not exist yet (Phase 12)
@@ -152,12 +166,20 @@ class RecommendationScorer:
             voice_tags=self.voice_tags,
             weights=weights,
         )
+        self.intent_profile = build_intent_profile(
+            answer_texts=[answer.answer_value for answer in self.answers if answer.answer_value],
+            voice_tags=self.voice_tags,
+            weights=weights,
+        )
         products = self._apply_requirement_profile(products)
 
         scored = self._calculate_base_scores(products, weights)
 
         # Step 5: Hard filters — disqualify products
         scored = self._apply_hard_filters(scored)
+
+        # Step 5b: Blend generic spec score with session intent fit.
+        scored = self._apply_intent_fit_modifiers(scored)
 
         # Step 6: Geography modifiers
         scored = self._apply_geography_modifiers(scored)
@@ -577,20 +599,32 @@ class RecommendationScorer:
             except (ScoringConfig.DoesNotExist, Exception):
                 pass
 
+        _merge_hard_filters(
+            hard_filters,
+            getattr(self, 'intent_profile', {}).get('required_floors', {}),
+        )
+
         # Also derive implicit hard filters from answers
         for answer in self.answers:
-            if answer.from_voice:
-                if answer.score_effect and isinstance(answer.score_effect, dict):
-                    hard_filters.update(answer.score_effect.get('hard_filters', {}))
-                continue
-
             inferred_effect = infer_answer_score_effect(
                 answer.question_text,
                 answer.answer_value,
             )
-            hard_filters.update(inferred_effect.get('hard_filters', {}))
+            _merge_hard_filters(hard_filters, inferred_effect.get('hard_filters', {}))
+
+            if answer.from_voice:
+                if answer.score_effect and isinstance(answer.score_effect, dict):
+                    _merge_hard_filters(
+                        hard_filters,
+                        answer.score_effect.get('hard_filters', {}),
+                    )
+                continue
+
             if answer.score_effect and isinstance(answer.score_effect, dict):
-                hard_filters.update(answer.score_effect.get('hard_filters', {}))
+                _merge_hard_filters(
+                    hard_filters,
+                    answer.score_effect.get('hard_filters', {}),
+                )
 
         # Apply: if product feature < minimum threshold, disqualify
         for product in scored:
@@ -603,6 +637,46 @@ class RecommendationScorer:
                     break
 
         return [p for p in scored if not p['disqualified']]
+
+    def _apply_intent_fit_modifiers(self, scored):
+        """
+        Blend the generic weighted spec score with a session-intent fit score.
+
+        The weighted score answers "how much spec is present"; the intent score
+        answers "is this the right kind of laptop for this buyer". Blending both
+        prevents overselling high-end hardware for simple use cases while still
+        letting gaming, creator, workstation, and business profiles win when the
+        answers justify them.
+        """
+        intent_profile = getattr(self, 'intent_profile', {}) or {}
+        if not intent_profile:
+            return scored
+
+        for product in scored:
+            breakdown = product.get('scoring_breakdown', {})
+            feature_scores = breakdown.get('feature_scores', {})
+            features = {
+                feature_code: detail.get('fit', 0.0)
+                for feature_code, detail in feature_scores.items()
+            }
+            intent_fit, intent_details = compute_intent_fit(features, intent_profile)
+            raw_fit = max(0.0, min(1.0, float(product.get('match_percentage', 0) or 0) / 100.0))
+            final_fit = max(0.0, min(1.0, raw_fit * 0.45 + intent_fit * 0.55))
+            max_possible = sum(
+                float(detail.get('weight', 0.0) or 0.0)
+                for detail in feature_scores.values()
+            )
+            product['final_score'] = round(final_fit * max_possible, 4)
+            product['match_percentage'] = int(round(final_fit * 100))
+            breakdown['intent_profile'] = intent_profile
+            breakdown['intent_fit'] = {
+                'fit': round(intent_fit, 3),
+                **intent_details,
+                'raw_weighted_fit': round(raw_fit, 3),
+                'blended_fit': round(final_fit, 3),
+            }
+
+        return scored
 
     def _apply_geography_modifiers(self, scored):
         """

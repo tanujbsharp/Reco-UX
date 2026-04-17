@@ -145,7 +145,7 @@ export function VoiceResultsScreen() {
   };
 
   const renderResultActions = () => (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <Button
         variant="outline"
         size="lg"
@@ -350,7 +350,7 @@ export function VoiceResultsScreen() {
                 {tagError && <p className="mt-3 text-sm text-amber-600">{tagError}</p>}
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-t border-slate-200 pt-5">
                 {renderResultActions()}
               </div>
               </div>

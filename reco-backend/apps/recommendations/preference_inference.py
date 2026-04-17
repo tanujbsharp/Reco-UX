@@ -26,7 +26,20 @@ CREATIVE_TERMS = [
 GAMING_TERMS = [
     "gaming", "gamer", "games", "fps", "valorant", "cs2", "fortnite", "minecraft",
     "streaming", "stream", "unreal", "blender", "gpu", "rtx", "graphics card",
-    "aaa", "esports",
+    "aaa", "esports", "valo", "f1", "formula 1",
+]
+DEMANDING_GAMING_TERMS = [
+    "high-performance gaming", "high performance gaming", "modern aaa", "aaa titles",
+    "aaa", "latest games", "demanding games", "graphically rich", "maximum gaming power",
+    "raw gaming power", "highest settings", "modern games", "gaming laptop", "gaming pc",
+    "f1", "formula 1",
+]
+COMPETITIVE_GAMING_TERMS = [
+    "competitive gaming", "esports", "valorant", "valo", "cs2", "high refresh",
+    "smooth gaming", "without any stutter",
+]
+REAL_GPU_TERMS = [
+    "rtx", "dedicated graphics", "dedicated gpu", "real gpu", "graphics card",
 ]
 PORTABILITY_TERMS = [
     "lightweight", "portable", "carry", "travel", "mobility", "commute",
@@ -45,7 +58,8 @@ COMPACT_SCREEN_TERMS = [
 LARGE_SCREEN_TERMS = [
     "15 inch", "15-inch", "16 inch", "16-inch", "17 inch", "17-inch", "big screen",
     "larger display", "more screen", "more screen space", "large immersive display",
-    "standard 15 16", "standard 15-16", "large 16 high refresh",
+    "standard 15 16", "standard 15-16", "large 16", "16 high-refresh",
+    "16 high refresh", "large 16 high-refresh", "large 16 high refresh",
 ]
 PERFORMANCE_HIGH_TERMS = [
     "best", "powerful", "high-end", "high end", "strongest", "heavy workloads",
@@ -99,6 +113,7 @@ def infer_answer_score_effect(question_text: str, answer_value: str) -> dict:
     question_text_norm = _normalize(question_text)
     answer_text = _normalize(answer_value)
     adjustments: defaultdict[str, float] = defaultdict(float)
+    hard_filters: dict[str, float] = {}
     contexts = _question_context(question_text_norm)
 
     # Interpret the customer's answer directly. Avoid matching against
@@ -154,6 +169,13 @@ def infer_answer_score_effect(question_text: str, answer_value: str) -> dict:
         _add(adjustments, "portability", -0.15)
         _add(adjustments, "compactness", -0.2)
 
+        if _has_any(answer_text, DEMANDING_GAMING_TERMS + REAL_GPU_TERMS):
+            hard_filters["graphics"] = max(hard_filters.get("graphics", 0.0), 0.8)
+            hard_filters["processor"] = max(hard_filters.get("processor", 0.0), 0.78)
+        elif _has_any(answer_text, COMPETITIVE_GAMING_TERMS):
+            hard_filters["graphics"] = max(hard_filters.get("graphics", 0.0), 0.72)
+            hard_filters["processor"] = max(hard_filters.get("processor", 0.0), 0.7)
+
     if _has_any(answer_text, PORTABILITY_TERMS):
         _add(adjustments, "portability", 0.45)
         _add(adjustments, "weight", 0.35)
@@ -200,12 +222,19 @@ def infer_answer_score_effect(question_text: str, answer_value: str) -> dict:
         _add(adjustments, "display_size", 0.35)
         _add(adjustments, "compactness", -0.35)
 
+        if _has_any(answer_text, ["high-refresh", "high refresh", "gaming", "16 high-refresh", "16 high refresh"]):
+            hard_filters["display_size"] = max(hard_filters.get("display_size", 0.0), 0.72)
+
     if _has_any(answer_text, PERFORMANCE_HIGH_TERMS):
         _add(adjustments, "processor", 0.5)
         _add(adjustments, "ram", 0.35)
         _add(adjustments, "creative_headroom", 0.3)
         _add(adjustments, "right_sized_performance", -0.2)
         _add(adjustments, "price", -0.15)
+
+        if _has_any(answer_text, GAMING_TERMS):
+            hard_filters["graphics"] = max(hard_filters.get("graphics", 0.0), 0.8)
+            hard_filters["processor"] = max(hard_filters.get("processor", 0.0), 0.78)
 
     if _has_any(answer_text, MODERATE_PERFORMANCE_TERMS):
         _add(adjustments, "processor", -0.18)
@@ -334,7 +363,11 @@ def infer_answer_score_effect(question_text: str, answer_value: str) -> dict:
             for key, value in adjustments.items()
             if abs(value) >= 0.01
         },
-        "hard_filters": {},
+        "hard_filters": {
+            key: round(value, 3)
+            for key, value in hard_filters.items()
+            if value > 0
+        },
     }
 
 

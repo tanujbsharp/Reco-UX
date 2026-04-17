@@ -229,17 +229,6 @@ export function GuidedQuestionsScreen() {
     setEstimatedTotalQuestions(generalQuestions.length);
   }, [directGuidedEntry, generalQuestions]);
 
-  // Auto-advance to newly arrived LLM question
-  useEffect(() => {
-    if (usingLLMQuestions && questions.length > 0 && currentIndex < questions.length - 1 && isSubmittingAnswer === false) {
-      // A new question was appended — advance to it
-      const nextIdx = questions.length - 1;
-      if (nextIdx > currentIndex && answers.length >= currentIndex + 1) {
-        goToQuestion(nextIdx, "left");
-      }
-    }
-  }, [answers.length, currentIndex, isSubmittingAnswer, questions.length, usingLLMQuestions]);
-
   useEffect(() => {
     if (!(questionsLoading || isSubmittingAnswer)) {
       document.body.style.cursor = "";
@@ -598,8 +587,13 @@ export function GuidedQuestionsScreen() {
         }
 
         if (nextData?.question) {
-          setQuestions((prev) => [...prev, mapLLMQuestion(nextData, prev.length)]);
+          const nextIndex = currentIndex + 1;
+          setQuestions((prev) => [
+            ...prev.slice(0, nextIndex),
+            mapLLMQuestion(nextData, nextIndex),
+          ]);
           setEstimatedTotalQuestions(Number(nextData.total_estimated) || 5);
+          goToQuestion(nextIndex, "left");
         }
         return;
       }
