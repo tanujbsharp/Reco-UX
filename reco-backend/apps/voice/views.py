@@ -18,7 +18,7 @@ from apps.common.permissions import CsrfExemptSessionAuthentication
 from rest_framework.response import Response
 
 from apps.voice.whisper_service import transcribe_audio
-from apps.voice.tag_extractor import extract_tags
+from apps.voice.tag_extractor import analyze_customer_intent
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,8 @@ def transcribe(request):
         {
             "transcript": "...",
             "language": "en",
-            "tags": [{"tag": "...", "category": "...", "confidence": 0.9}, ...]
+            "tags": [{"tag": "...", "category": "...", "confidence": 0.9}, ...],
+            "archetype": {"label": "...", "confidence": 0.9} | null
         }
     """
     audio_file = request.FILES.get('audio')
@@ -62,12 +63,13 @@ def transcribe(request):
         transcript_text = transcription.get('transcript', '')
 
         # Step 2: Extract preference tags via Bedrock
-        tags = extract_tags(transcript_text)
+        analysis = analyze_customer_intent(transcript_text)
 
         return Response({
             'transcript': transcript_text,
             'language': transcription.get('language', 'en'),
-            'tags': tags,
+            'tags': analysis.get('tags', []),
+            'archetype': analysis.get('archetype'),
         })
 
     except Exception as e:
@@ -89,7 +91,10 @@ def analyze_text(request):
     Skips Whisper, goes directly to Bedrock tag extraction.
 
     Returns:
-        {"tags": [{"tag": "...", "category": "...", "confidence": 0.9}, ...]}
+        {
+            "tags": [{"tag": "...", "category": "...", "confidence": 0.9}, ...],
+            "archetype": {"label": "...", "confidence": 0.9} | null
+        }
     """
     text = request.data.get('text', '')
     if not text or not text.strip():
@@ -99,8 +104,11 @@ def analyze_text(request):
         )
 
     try:
-        tags = extract_tags(text)
-        return Response({'tags': tags})
+        analysis = analyze_customer_intent(text)
+        return Response({
+            'tags': analysis.get('tags', []),
+            'archetype': analysis.get('archetype'),
+        })
 
     except Exception as e:
         logger.exception('Text analysis failed')

@@ -1,11 +1,14 @@
 """
 Question Orchestrator for Bsharp Reco.
 
-Generates adaptive follow-up questions using Amazon Bedrock (Claude).
-No pre-authored question bank — every question is LLM-generated based
-on session state, product catalog dimensions, and moderation rules.
+Flow:
+1. Ask who the primary user is.
+2. Ask the top intended use cases.
+3-5. Generate Bedrock-driven follow-up questions tailored to the
+   primary user, use cases, discovery brief, manual tags, and any
+   detected user archetype.
 
-Stopping condition: confidence >= 0.85 or question_number > max_questions.
+Stopping condition: question_number > max_questions.
 """
 import json
 import logging
@@ -26,8 +29,42 @@ logger = logging.getLogger(__name__)
 
 # Orchestrator defaults
 DEFAULT_MAX_QUESTIONS = 5
-MIN_QUESTIONS_BEFORE_DONE = 5
-CONFIDENCE_THRESHOLD = 0.85
+
+PRIMARY_USER_QUESTION_TEXT = 'Who is the primary user for this laptop?'
+USE_CASE_QUESTION_TEXT = 'What will it mainly be used for?'
+
+PRIMARY_USER_QUESTION = {
+    'question': PRIMARY_USER_QUESTION_TEXT,
+    'type': 'single-choice',
+    'options': [
+        {'label': 'Myself', 'description': 'I am choosing for my own use', 'icon': 'CircleHelp'},
+        {'label': 'My spouse or partner', 'description': 'For my husband, wife, or partner', 'icon': 'CircleHelp'},
+        {'label': 'My parent', 'description': 'For my mother, father, or an older parent', 'icon': 'CircleHelp'},
+        {'label': 'My child who is a student', 'description': 'For school, college, or academic use', 'icon': 'BookOpen'},
+        {'label': 'My sibling or another family member', 'description': 'For someone else in the family', 'icon': 'CircleHelp'},
+        {'label': 'My team or employee', 'description': 'For work or business use by someone else', 'icon': 'BriefcaseBusiness'},
+        {'label': 'A shared family device', 'description': 'More than one person will use it regularly', 'icon': 'Laptop2'},
+    ],
+}
+
+USE_CASE_QUESTION = {
+    'question': USE_CASE_QUESTION_TEXT,
+    'type': 'multi-choice',
+    'options': [
+        {'label': 'Study and assignments', 'description': 'Schoolwork, notes, research, and projects', 'icon': 'BookOpen'},
+        {'label': 'College classes and project work', 'description': 'Presentations, coursework, and submissions', 'icon': 'BookOpen'},
+        {'label': 'Work and productivity', 'description': 'Docs, spreadsheets, browsing, and multitasking', 'icon': 'BriefcaseBusiness'},
+        {'label': 'Coding and software development', 'description': 'Development tools, terminals, and local builds', 'icon': 'Code2'},
+        {'label': 'Content creation and design', 'description': 'Design, editing, and creative tools', 'icon': 'Clapperboard'},
+        {'label': 'Video editing, 3D, or CAD', 'description': 'Heavier creative or technical workloads', 'icon': 'Clapperboard'},
+        {'label': 'Gaming and esports', 'description': 'Casual to competitive gaming needs', 'icon': 'Gauge'},
+        {'label': 'Streaming and content consumption', 'description': 'Movies, YouTube, OTT, and music', 'icon': 'MonitorSpeaker'},
+        {'label': 'Remote work and video calls', 'description': 'Meetings, collaboration, and home-office use', 'icon': 'ScreenShare'},
+        {'label': 'Business travel and presentations', 'description': 'Frequent carry, travel, and client meetings', 'icon': 'Backpack'},
+        {'label': 'Everyday browsing and home use', 'description': 'Simple daily use for general tasks', 'icon': 'Laptop2'},
+        {'label': 'Shared family use', 'description': 'A mix of different household needs', 'icon': 'CircleHelp'},
+    ],
+}
 
 SYSTEM_PROMPT = (
     "You are a retail product recommendation assistant for Bsharp Reco. "
@@ -35,27 +72,20 @@ SYSTEM_PROMPT = (
     "needs and narrow down product recommendations.\n\n"
     "RULES:\n"
     "1. Generate exactly ONE question at a time.\n"
-    "2. Each question must bring the conversation closer to a confident recommendation.\n"
-    "3. Consider the customer's previous answers and voice tags to avoid redundancy.\n"
-    "4. You must continue asking follow-up questions until at least 5 follow-up questions "
-    "have been answered. Before that point, done MUST be false.\n"
-    "5. If discovery input exists and zero follow-up questions have been answered so far, "
-    "you MUST ask a targeted clarifying question based on that discovery input. "
-    "In that case, done MUST be false.\n"
-    "6. You may signal done only after at least 5 follow-up questions have been answered "
-    "or if there is no discovery input at all and the customer already provided enough "
-    "structured information.\n"
-    "7. Keep questions conversational and easy to understand.\n"
-    "8. Use ONLY question types supported by the UI: single-choice or multi-choice.\n"
-    "9. Always provide 3 to 5 options. Include an 'Other' option only when it materially helps.\n"
-    "10. Provide meaningful options with short descriptions and icon suggestions.\n\n"
-    "11. NEVER ask about budget, price range, or affordability.\n"
-    "12. NEVER ask the customer to choose a processor, CPU, chip, GPU, RAM size, or storage tier directly.\n"
-    "13. NEVER mention Apple, Mac, M1, M2, M3, M4, Ryzen, Intel, Core, Ultra, Snapdragon, NVIDIA, RTX, GTX, Radeon, or GeForce.\n"
-    "14. Ask outcome-based questions only: workload, carry pattern, screen feel, battery vs headroom, gaming/3D need, touch/2-in-1 need, desk-vs-travel, or final tie-breakers.\n"
-    "15. Only mention capabilities that are actually represented in the active catalog summary.\n"
-    "16. If discovery input exists, personalize the question to that discovery input instead of using a generic question.\n"
-    "17. If discovery input does not exist, ask a general question that still helps differentiate the best fit.\n\n"
+    "2. This generator is used only for questions 3, 4, and 5. "
+    "Questions 1 and 2 have already established the primary user and use cases.\n"
+    "3. Each question must become more specific to that primary user and those use cases.\n"
+    "4. Consider the customer's previous answers, discovery brief, manual tags, and detected archetype to avoid redundancy.\n"
+    "5. Ask only the most decision-useful unresolved question for recommending the right laptop.\n"
+    "6. Keep questions conversational and easy to understand.\n"
+    "7. Use ONLY question types supported by the UI: single-choice or multi-choice.\n"
+    "8. Always provide 3 to 5 options with short descriptions and icon suggestions.\n"
+    "9. done MUST be false for these follow-up questions.\n\n"
+    "10. NEVER ask about budget, price range, or affordability.\n"
+    "11. NEVER ask the customer to choose a processor, CPU, chip, GPU, RAM size, or storage tier directly.\n"
+    "12. NEVER mention Apple, Mac, M1, M2, M3, M4, Ryzen, Intel, Core, Ultra, Snapdragon, NVIDIA, RTX, GTX, Radeon, or GeForce.\n"
+    "13. Ask outcome-based questions only: workflow intensity, portability pattern, screen/form factor feel, collaboration habits, creative/gaming intensity, desk-vs-travel context, accessory needs, battery expectations, or final deal-breakers.\n"
+    "14. Only mention capabilities that are actually represented in the active catalog summary.\n\n"
     "You MUST respond with ONLY valid JSON matching this schema:\n"
     "{\n"
     '  "question": "string — the question text",\n'
@@ -68,14 +98,6 @@ SYSTEM_PROMPT = (
     "}\n\n"
     "Do NOT include any text outside the JSON object."
 )
-
-QUESTION_GOALS = {
-    1: "Clarify the main real-world use case or workload in plain language.",
-    2: "Clarify carry pattern, mobility, or daily environment.",
-    3: "Clarify preferred screen feel, size, or form factor in plain language.",
-    4: "Clarify how much performance headroom is actually needed, without using processor or GPU jargon.",
-    5: "Clarify the final tie-breaker: value, portability, display quality, flexibility, or long-term headroom.",
-}
 
 QUESTION_BANNED_PATTERNS = [
     r"\bbudget\b",
@@ -140,7 +162,38 @@ def _extract_discovery_tags(answer):
                 'confidence': confidence,
             })
 
+    detected_archetype = str(score_effect.get('detected_archetype', '')).strip()
+    if detected_archetype:
+        archetype_confidence = score_effect.get('detected_archetype_confidence', 0.0)
+        try:
+            archetype_confidence = float(archetype_confidence)
+        except (TypeError, ValueError):
+            archetype_confidence = 0.0
+        tags.append({
+            'text': detected_archetype,
+            'category': 'user-archetype',
+            'confidence': archetype_confidence,
+        })
+
     return tags
+
+
+def _extract_profile_answers(answers):
+    primary_user = ''
+    use_cases = ''
+
+    for answer in answers:
+        if answer.from_voice:
+            continue
+
+        question_text = str(answer.question_text or '').strip()
+        answer_value = str(answer.answer_value or '').strip()
+        if question_text == PRIMARY_USER_QUESTION_TEXT:
+            primary_user = answer_value
+        elif question_text == USE_CASE_QUESTION_TEXT:
+            use_cases = answer_value
+
+    return primary_user, use_cases
 
 
 def _build_session_context(session, answers):
@@ -176,6 +229,17 @@ def _build_session_context(session, answers):
             if discovery_mode:
                 context_parts.append(f"    Mode: {discovery_mode}")
 
+            detected_archetype = str(score_effect.get('detected_archetype', '')).strip()
+            if detected_archetype:
+                confidence = score_effect.get('detected_archetype_confidence', 0.0)
+                try:
+                    confidence = float(confidence)
+                except (TypeError, ValueError):
+                    confidence = 0.0
+                context_parts.append(
+                    f"    Detected user archetype: {detected_archetype} (confidence={confidence:.2f})"
+                )
+
             tags = _extract_discovery_tags(vi)
             if tags:
                 context_parts.append("    Extracted tags:")
@@ -188,6 +252,11 @@ def _build_session_context(session, answers):
 
     # Previous Q&A history
     non_voice_answers = [a for a in answers if not a.from_voice]
+    primary_user, use_cases = _extract_profile_answers(answers)
+    if primary_user:
+        context_parts.append(f"\nPrimary user: {primary_user}")
+    if use_cases:
+        context_parts.append(f"Declared use cases: {use_cases}")
     if non_voice_answers:
         context_parts.append("\nPrevious questions and answers:")
         for idx, ans in enumerate(non_voice_answers, 1):
@@ -201,84 +270,19 @@ def _build_session_context(session, answers):
     return "\n".join(context_parts)
 
 
-def _has_discovery_signal(answers):
-    """Return True when discovery text or extracted tags exist in the session."""
-    for answer in answers:
-        if not answer.from_voice:
-            continue
+def _fixed_question(question_number, max_questions):
+    if question_number == 1:
+        payload = dict(PRIMARY_USER_QUESTION)
+    else:
+        payload = dict(USE_CASE_QUESTION)
 
-        if str(answer.answer_value).strip():
-            return True
-
-        if _extract_discovery_tags(answer):
-            return True
-
-    return False
-
-
-def _forced_first_question(answers, question_number, max_questions):
-    """
-    Defensive fallback when the model tries to skip question generation
-    despite having discovery input. Keeps the flow moving with a
-    discovery-aware clarifying card.
-    """
-    categories = set()
-    for answer in answers:
-        if not answer.from_voice:
-            continue
-        for tag in _extract_discovery_tags(answer):
-            if tag['category']:
-                categories.add(tag['category'])
-
-    if 'usage' in categories:
-        return {
-            'question': 'Which workflow should this recommendation prioritize most?',
-            'type': 'single-choice',
-            'options': [
-                {'label': 'Study & everyday use', 'description': 'Classes, research, streaming, daily tasks', 'icon': 'BookOpen'},
-                {'label': 'Work & productivity', 'description': 'Office apps, browsing, multitasking', 'icon': 'BriefcaseBusiness'},
-                {'label': 'Coding & technical work', 'description': 'Development tools, terminals, heavier workflows', 'icon': 'Code2'},
-                {'label': 'Creative work', 'description': 'Editing, design, rendering, media-heavy tasks', 'icon': 'Clapperboard'},
-                {'label': 'Gaming & 3D work', 'description': 'Modern games, streaming, or graphics-heavy tools', 'icon': 'Gauge'},
-            ],
-            'question_number': question_number,
-            'total_estimated': max_questions,
-            'confidence': 0.35,
-            'done': False,
-        }
-
-    if 'performance' in categories or 'portability' in categories:
-        return {
-            'question': 'If we have to trade off, which matters more for you?',
-            'type': 'single-choice',
-            'options': [
-                {'label': 'Performance first', 'description': 'Prioritize speed, headroom, and heavier workloads', 'icon': 'Gauge'},
-                {'label': 'Balanced', 'description': 'Keep both performance and mobility in good shape', 'icon': 'Scaling'},
-                {'label': 'Portability first', 'description': 'Prioritize lighter carry and easier daily movement', 'icon': 'Feather'},
-                {'label': 'Battery first', 'description': 'Prioritize unplugged usage as much as possible', 'icon': 'BatteryFull'},
-            ],
-            'question_number': question_number,
-            'total_estimated': max_questions,
-            'confidence': 0.35,
-            'done': False,
-        }
-
-    return {
-        'question': 'Which of these sounds closest to how you will use the laptop most?',
-        'type': 'single-choice',
-        'options': [
-            {'label': 'Classes, browsing, and Office work', 'description': 'Daily student or productivity use', 'icon': 'BookOpen'},
-            {'label': 'Coding and assignments', 'description': 'Development tools and multitasking', 'icon': 'Code2'},
-            {'label': 'Creative projects', 'description': 'Design, editing, and media work', 'icon': 'Clapperboard'},
-            {'label': 'Gaming or 3D-heavy work', 'description': 'Modern games, streaming, or graphics-heavy tools', 'icon': 'Gauge'},
-            {'label': 'A mix of everything', 'description': 'A balanced all-round fit', 'icon': 'Scaling'},
-        ],
-        'prefill_from_tags': ['usage'],
+    payload.update({
         'question_number': question_number,
         'total_estimated': max_questions,
-        'confidence': 0.30,
+        'confidence': round(0.18 * question_number, 2),
         'done': False,
-    }
+    })
+    return payload
 
 
 def _catalog_capabilities(session):
@@ -375,128 +379,32 @@ def _build_catalog_context(session):
     return "\n".join([capability_line, "Available products:", *summary_lines])
 
 
-def _catalog_question_bank(caps):
-    screen_options = [
-        {'label': 'Easy to carry', 'description': 'A smaller, lighter everyday carry', 'icon': 'Feather'},
-        {'label': 'Balanced 14-inch feel', 'description': 'A middle ground between comfort and portability', 'icon': 'Laptop2'},
-    ]
-    if caps.get('has_large_screen'):
-        screen_options.append(
-            {'label': 'More screen space', 'description': 'Better for split-screen work and spreadsheets', 'icon': 'MonitorUp'}
-        )
-    if caps.get('has_convertible'):
-        screen_options.append(
-            {'label': 'Touch or pen-friendly', 'description': 'Useful for handwriting, sketching, or flexible use', 'icon': 'PanelLeftOpen'}
-        )
-    screen_options.append(
-        {'label': 'Not sure yet', 'description': 'Let the recommendation decide the best fit', 'icon': 'CircleHelp'}
-    )
-
-    headroom_options = [
-        {'label': 'Just regular student or office use', 'description': 'No need to overspend for extra power', 'icon': 'BriefcaseBusiness'},
-        {'label': 'Coding and multitasking', 'description': 'More room for development tools and tabs', 'icon': 'Code2'},
-        {'label': 'Creative work with a better display', 'description': 'Editing, design, or media projects', 'icon': 'Clapperboard'},
-    ]
-    if caps.get('has_dedicated_graphics'):
-        headroom_options.append(
-            {'label': 'Gaming, 3D, or heavier editing', 'description': 'A real graphics boost is important', 'icon': 'Gauge'}
-        )
-    headroom_options.append(
-        {'label': 'Not sure yet', 'description': 'Show me the safest fit', 'icon': 'CircleHelp'}
-    )
-
-    final_priority_options = [
-        {'label': "Best fit for today's needs", 'description': 'Avoid paying for more than I need right now', 'icon': 'Scaling'},
-        {'label': 'Room to grow over time', 'description': 'A bit more headroom for future needs', 'icon': 'Sparkles'},
-        {'label': 'Lighter carry and battery', 'description': 'Easy daily movement matters most', 'icon': 'BatteryFull'},
-        {'label': 'More ports and durability', 'description': 'Better for long-term practical use', 'icon': 'PlugZap'},
-    ]
-    if caps.get('has_convertible'):
-        final_priority_options.append(
-            {'label': 'Touch or 2-in-1 flexibility', 'description': 'A convertible design would be useful', 'icon': 'PanelLeftOpen'}
-        )
-    else:
-        final_priority_options.append(
-            {'label': 'Better display quality', 'description': 'A nicer panel matters more than extras', 'icon': 'Monitor'}
-        )
-
-    return [
-        {
-            'question': 'Which of these sounds closest to how you will use the laptop most?',
-            'type': 'single-choice',
-            'options': [
-                {'label': 'Classes, browsing, and Office work', 'description': 'Student use, docs, slides, and everyday tasks', 'icon': 'BookOpen'},
-                {'label': 'Coding and assignments', 'description': 'Development tools, terminals, and multitasking', 'icon': 'Code2'},
-                {'label': 'Creative projects', 'description': 'Design, editing, and media work', 'icon': 'Clapperboard'},
-                {'label': 'Gaming or 3D-heavy work', 'description': 'Modern games, streaming, or graphics-heavy tools', 'icon': 'Gauge'},
-                {'label': 'A bit of everything', 'description': 'I want a balanced all-round laptop', 'icon': 'Scaling'},
-            ],
-            'prefill_from_tags': ['usage'],
-        },
-        {
-            'question': 'How often will you carry it around?',
-            'type': 'single-choice',
-            'options': [
-                {'label': 'Every day', 'description': 'Weight and battery matter a lot', 'icon': 'Backpack'},
-                {'label': 'A few times a week', 'description': 'I want a balance of comfort and mobility', 'icon': 'MoveRight'},
-                {'label': 'Mostly stays on a desk', 'description': 'Screen and performance can matter more', 'icon': 'Monitor'},
-                {'label': 'Not sure yet', 'description': 'Keep both options open', 'icon': 'CircleHelp'},
-            ],
-            'prefill_from_tags': ['portability'],
-        },
-        {
-            'question': 'What screen feel sounds best for you?',
-            'type': 'single-choice',
-            'options': screen_options[:5],
-            'prefill_from_tags': ['screen-size'],
-        },
-        {
-            'question': 'How much extra graphics or performance headroom do you really need?',
-            'type': 'single-choice',
-            'options': headroom_options[:5],
-            'prefill_from_tags': ['performance', 'features'],
-        },
-        {
-            'question': 'What should decide the final pick if two options both fit?',
-            'type': 'single-choice',
-            'options': final_priority_options[:5],
-            'prefill_from_tags': ['priority', 'features'],
-        },
-    ]
-
-
 def _deterministic_question(session, answers, question_number, max_questions):
-    caps = _catalog_capabilities(session)
-    bank = _catalog_question_bank(caps)
-    index = min(max(question_number - 1, 0), len(bank) - 1)
-    question = dict(bank[index])
-    question.update({
-        'question_number': question_number,
-        'total_estimated': max_questions,
-        'confidence': round(min(0.2 + 0.13 * (question_number - 1), 0.8), 2),
-        'done': False,
-    })
-    return question
+    del session, answers
+    return _fallback_question(question_number, max_questions)
 
 
 def _build_generation_prompt(session, answers, question_number, max_questions):
-    goal = QUESTION_GOALS.get(question_number, QUESTION_GOALS[5])
     context = _build_session_context(session, answers)
     catalog_context = _build_catalog_context(session)
     return (
         f"Ask question {question_number} of {max_questions}.\n"
-        f"Current question goal: {goal}\n\n"
-        "You are asking a Lenovo-laptop recommendation question. "
-        "Use the discovery brief and previous answers to tailor the next question. "
-        "If the customer already hinted at a dimension, ask the next unresolved trade-off instead of repeating it.\n\n"
+        "You are generating one of the final three recommendation questions. "
+        "Questions 1 and 2 already captured the primary user and intended use cases. "
+        "Use the discovery brief, detected archetype, manual tags, and previous answers to tailor the next question. "
+        "The next question must be more specific to that exact person and use case combination.\n\n"
         "Question design requirements:\n"
+        "- Ask the single most useful unresolved question for narrowing the shortlist.\n"
+        "- Questions 3, 4, and 5 should progressively get more specific.\n"
         "- Ask in plain English, not tech jargon.\n"
         "- Do not ask for budget.\n"
         "- Do not ask for processor, CPU, chip, RAM, storage, or GPU selection.\n"
         "- Do not mention brands or chips outside the Lenovo catalog.\n"
         "- Keep options short and realistic.\n"
+        "- Prefer real-life scenarios, workload intensity, portability patterns, collaboration setup, display/form-factor feel, content creation intensity, gaming intensity, or deal-breakers.\n"
         "- If gaming or 3D is relevant, ask about that need in plain language rather than GPU names.\n"
-        "- If touch/2-in-1 is relevant, only ask about it when the catalog supports it.\n\n"
+        "- If touch/2-in-1 is relevant, only ask about it when the catalog supports it.\n"
+        "- Use multi-choice when multiple answers can reasonably apply.\n\n"
         f"SESSION CONTEXT:\n{context}\n\n"
         f"CATALOG CONTEXT:\n{catalog_context}\n\n"
         "Return only the next question JSON."
@@ -534,8 +442,6 @@ def _validate_llm_question(question_obj, session, answers, question_number, max_
     normalized['done'] = False
 
     if _question_has_banned_content(normalized) or _question_repeats_history(normalized, answers):
-        if _has_discovery_signal(answers) and question_number == 1:
-            return _forced_first_question(answers, question_number, max_questions)
         return _deterministic_question(session, answers, question_number, max_questions)
 
     return normalized
@@ -568,8 +474,6 @@ def generate_next_question(session_id, max_questions=None):
     # Count non-voice answers (these are the actual Q&A interactions)
     qa_answers = [a for a in answers if not a.from_voice]
     current_question_number = len(qa_answers) + 1
-    has_discovery_signal = _has_discovery_signal(answers)
-
     # Step 2: Check stopping condition — max questions reached
     if current_question_number > max_q:
         logger.info(
@@ -585,8 +489,8 @@ def generate_next_question(session_id, max_questions=None):
             'message': 'Ready for recommendations',
         }
 
-    if not has_discovery_signal:
-        return _deterministic_question(session, answers, current_question_number, max_q)
+    if current_question_number <= 2:
+        return _fixed_question(current_question_number, max_q)
 
     start_ms = _now_ms()
     try:
@@ -607,8 +511,6 @@ def generate_next_question(session_id, max_questions=None):
     except Exception:
         logger.exception('Question generation failed for session %s', session_id)
         _log_llm_call(session, 'question', _now_ms() - start_ms)
-        if has_discovery_signal and current_question_number == 1:
-            return _forced_first_question(answers, current_question_number, max_q)
         return _deterministic_question(session, answers, current_question_number, max_q)
 
 
@@ -706,16 +608,15 @@ def _fallback_question(question_number, max_questions):
     This keeps the conversation going rather than erroring out.
     """
     return {
-        'question': 'Which of these matters most for the laptop you want us to recommend?',
-        'type': 'single-choice',
+        'question': 'Which situation should we optimize for most when picking the final laptop?',
+        'type': 'multi-choice',
         'options': [
-            {'label': 'Everyday student or office fit', 'description': 'Simple, practical, and enough for daily work', 'icon': 'BriefcaseBusiness'},
-            {'label': 'More headroom for coding or heavier use', 'description': 'A bit more power for future needs', 'icon': 'Gauge'},
-            {'label': 'Gaming or 3D capability', 'description': 'Useful for graphics-heavy work and modern games', 'icon': 'Clapperboard'},
-            {'label': 'Easy daily carry', 'description': 'Lower weight and better mobility', 'icon': 'Feather'},
-            {'label': 'Better screen or overall quality', 'description': 'A nicer premium experience', 'icon': 'Sparkles'},
+            {'label': 'Heavy multitasking days', 'description': 'Many apps, tabs, and background tools open together', 'icon': 'Gauge'},
+            {'label': 'Frequent travel or daily carry', 'description': 'Lower weight and easier mobility matter a lot', 'icon': 'Backpack'},
+            {'label': 'Long meetings or classes away from a charger', 'description': 'Battery reliability matters more', 'icon': 'BatteryFull'},
+            {'label': 'Creative or visual work', 'description': 'Editing, design, presentations, or richer visuals', 'icon': 'Clapperboard'},
+            {'label': 'Shared or flexible use', 'description': 'More than one kind of workload needs to fit well', 'icon': 'Scaling'},
         ],
-        'prefill_from_tags': ['priority', 'features'],
         'question_number': question_number,
         'total_estimated': max_questions,
         'confidence': 0.0,

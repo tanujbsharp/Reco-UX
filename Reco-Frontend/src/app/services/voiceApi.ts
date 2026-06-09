@@ -1,5 +1,26 @@
 import { apiFetch, API_BASE_URL, readJsonResponse } from './api';
 
+export interface DetectedArchetype {
+  label: string;
+  confidence: number;
+}
+
+export interface VoiceAnalysisTag {
+  tag: string;
+  category: string;
+  confidence: number;
+}
+
+export interface VoiceAnalysisResponse {
+  tags: VoiceAnalysisTag[];
+  archetype: DetectedArchetype | null;
+}
+
+export interface VoiceTranscriptionResponse extends VoiceAnalysisResponse {
+  transcript: string;
+  language: string;
+}
+
 function inferAudioExtension(audioBlob: Blob): string {
   const mimeType = audioBlob.type.toLowerCase();
 
@@ -19,7 +40,7 @@ function inferAudioExtension(audioBlob: Blob): string {
   return 'webm';
 }
 
-export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: string; language: string; tags: Array<{ tag: string; category: string; confidence: number }> }> {
+export async function transcribeAudio(audioBlob: Blob): Promise<VoiceTranscriptionResponse> {
   const formData = new FormData();
   const extension = inferAudioExtension(audioBlob);
   formData.append('audio', audioBlob, `recording.${extension}`);
@@ -34,7 +55,7 @@ export async function transcribeAudio(audioBlob: Blob): Promise<{ transcript: st
   return readJsonResponse(res);
 }
 
-export async function analyzeText(text: string): Promise<{ tags: Array<{ tag: string; category: string; confidence: number }> }> {
+export async function analyzeText(text: string): Promise<VoiceAnalysisResponse> {
   const res = await apiFetch('/api/voice/analyze-text', { method: 'POST', body: JSON.stringify({ text }) });
   return readJsonResponse(res);
 }

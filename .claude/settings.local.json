@@ -43,7 +43,13 @@
       "Bash(python3 build_ppt.py)",
       "Bash(python3)",
       "Bash(ls -la /Users/tanujsadasivam/Desktop/Bsharp_Reco_Implementation/demoppt/ss*.png)",
-      "Bash(python3 build_ppt_compact.py)"
+      "Bash(python3 build_ppt_compact.py)",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql -u root reco_db -e \"SHOW TABLES LIKE '%user%';\")",
+      "Bash(mysql -u root reco_db -e \"SHOW TABLES LIKE '%user%';\")",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql -u root reco_db -e \"DESCRIBE celebrate_users;\")",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql -u root reco_db -e \"SELECT id, email_id, first_name, last_name, is_staff, is_admin, super_user, status, LEFT\\(password, 30\\) AS pwd_prefix FROM celebrate_users WHERE email_id LIKE '%renita%' \\\\G\")",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql -u root reco_db -e \"UPDATE celebrate_users SET is_staff=1, is_admin=1, super_user=1 WHERE id=68;\")",
+      "Bash(/Applications/XAMPP/xamppfiles/bin/mysql -u root reco_db -e \"SELECT id, email_id, is_staff, is_admin, super_user, status FROM celebrate_users WHERE id=68 \\\\G\")"
     ]
   }
 }

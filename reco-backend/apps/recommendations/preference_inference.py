@@ -8,6 +8,7 @@ SIMPLE_USE_TERMS = [
     "excel", "spreadsheet", "office", "presentation", "powerpoint", "student",
     "study", "class", "docs", "document", "browsing", "browser", "everyday",
     "basic", "travel", "meeting", "presentations", "productivity",
+    "streaming", "media", "entertainment", "youtube", "netflix", "ott",
 ]
 TECHNICAL_TERMS = [
     "coding", "developer", "development", "programming", "software", "engineering",
@@ -25,7 +26,7 @@ CREATIVE_TERMS = [
 ]
 GAMING_TERMS = [
     "gaming", "gamer", "games", "fps", "valorant", "cs2", "fortnite", "minecraft",
-    "streaming", "stream", "unreal", "blender", "gpu", "rtx", "graphics card",
+    "unreal", "blender", "gpu", "rtx", "graphics card",
     "aaa", "esports", "valo", "f1", "formula 1",
 ]
 DEMANDING_GAMING_TERMS = [

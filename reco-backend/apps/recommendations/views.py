@@ -57,22 +57,23 @@ RERANK_SYSTEM_PROMPT = (
     "You are the final recommendation selector for Bsharp Reco. "
     "Choose the three Lenovo laptops that best fit the customer's actual needs.\n\n"
     "RULES:\n"
-    "0. The numeric scorer has already ranked these candidates by fit. Treat that base order as the default truth. "
-    "Only change it when the evidence is clearly stronger for a nearby alternative.\n"
+    "0. Use the structured preference profile as the primary customer truth. "
+    "Use the numeric score as supporting evidence, not as an ordering constraint.\n"
     "1. Prefer best fit over strongest hardware.\n"
     "2. Penalize overkill. Do not reward premium power if the customer's needs are moderate.\n"
-    "3. Use the customer's discovery input, follow-up answers, and product specs together.\n"
-    "4. If the customer sounds like student, Office, browsing, light coding, or general productivity, "
-    "favor right-sized value and portability over premium extras unless the answers clearly justify them.\n"
-    "5. If the customer clearly needs gaming, 3D, rendering, or heavier creative work, it is valid to select dGPU/performance models.\n"
+    "3. Use the customer's discovery input, follow-up answers, preference profile, semantic fit signals, and product specs together.\n"
+    "4. Choose the product that best satisfies the profile dimensions such as simplicity, media comfort, readability, portability, touch flexibility, shared use, or performance need.\n"
+    "5. It is valid to reorder candidates freely when the profile fit and product evidence justify it.\n"
     "6. Return exactly 3 product IDs chosen from the candidates provided.\n"
     "7. Also return a final fit percentage for each selected product. These fit percentages must be in descending order and must reflect the final recommendation order.\n"
     "8. The fit percentages should be honest but shortlist-relative: a strong top recommendation can be in the 70s or 80s; do not force equal or arbitrary spacing.\n\n"
     "9. Higher right_sized_performance is better. Higher performance_overkill_risk means the laptop exceeds the need by too much. Higher performance_undershoot_risk means it falls short.\n"
-    "10. If a product has stronger raw specs but materially worse right_sized_performance or value_for_money, it should usually rank lower unless the answers explicitly call for that extra headroom.\n\n"
+    "10. If a product has stronger raw specs but materially worse profile_fit, right_sized_performance, simplicity, or media/readability fit, it should usually rank lower unless the answers explicitly call for that extra headroom.\n\n"
+    "10a. When the customer explicitly asks for high-performance gaming, AAA/latest heavy games, lag-free play, high-end GPU, pro gaming display, or a title such as GTA 6, stronger relevant gaming hardware is fit-to-need, not overkill. "
+    "In that case, prefer the better GPU, processor, cooling/display, and sustained performance unless the customer stated a clear portability, budget, or simplicity constraint.\n\n"
     "11. Do not let marketing-style copy such as 'Best for' or 'Fit summary' outweigh the base scores and fit-to-need signals. "
     "Use those text fields only as supporting context.\n"
-    "12. Be conservative. Prefer small reordering of the current top products over replacing them entirely.\n\n"
+    "12. Be decisive: choose the best customer fit from the candidate pool, not merely the highest base score.\n\n"
     "Respond with ONLY valid JSON:\n"
     "{\n"
     '  "ordered_product_ids": [integer, integer, integer],\n'
@@ -136,7 +137,7 @@ def get_recommendations(request, session_id):
     # --- Step 2: Run scoring pipeline ---
     try:
         scorer = RecommendationScorer(session_id)
-        scored_products = scorer.calculate_scores(top_n=6)
+        scored_products = scorer.calculate_scores(top_n=12)
     except Exception as e:
         logger.exception('Scoring pipeline failed for session %s', session_id)
         return Response(
@@ -300,6 +301,9 @@ def _serialize_results(results, explanations_cache=None):
             fit_summary = _sanitize_customer_facing_text(
                 explanation.get('fitSummary') or pdata.get('fit_summary', '')
             )
+            fit_label = _sanitize_customer_facing_text(
+                explanation.get('fitLabel') or ''
+            )
             key_highlights = _sanitize_customer_facing_list(
                 explanation.get('keyHighlights') or pdata.get('key_highlights', [])
             )
@@ -331,7 +335,14 @@ def _serialize_results(results, explanations_cache=None):
                 'product_code': pdata.get('product_code', ''),
                 'image': pdata.get('image', ''),
                 'gallery': pdata.get('gallery', []),
-                'best_for': pdata.get('best_for', ''),
+                'best_for': _contextual_recommendation_label(
+                    fit_label=fit_label,
+                    matched_benefits=matched_benefits,
+                    key_highlights=key_highlights,
+                    fit_summary=fit_summary,
+                    fallback=pdata.get('best_for', ''),
+                ),
+                'catalog_best_for': pdata.get('best_for', ''),
                 'fit_summary': fit_summary,
                 'key_highlights': key_highlights,
                 'salesperson_tips': _sanitize_customer_facing_list(
@@ -368,6 +379,7 @@ def _serialize_results(results, explanations_cache=None):
         else:
             output.append(result)
 
+    _dedupe_recommendation_badges(output)
     return output
 
 
@@ -412,7 +424,9 @@ def _rerank_recommendations_with_llm(session, scored_products, answers=None):
             max_tokens=1200,
         )
         ordered_ids, fit_percentages = _parse_rerank_response(raw_response, candidate_ids)
-        ordered_ids = _apply_conservative_rerank(ordered_ids, scored_products)
+        preference_profile = _extract_preference_profile(scored_products)
+        if not preference_profile:
+            ordered_ids = _apply_conservative_rerank(ordered_ids, scored_products)
         _log_llm_call(session, 'rerank', _now_ms() - start_ms)
     except Exception as exc:
         logger.warning('Recommendation rerank failed for session %s: %s', session.session_id, exc)
@@ -483,6 +497,17 @@ def _apply_display_match_percentages(reranked_products, fit_percentages=None):
         previous_fit = final_fit
 
 
+def _extract_preference_profile(scored_products):
+    for product in scored_products or []:
+        profile = (
+            product.get('scoring_breakdown', {})
+            .get('preference_profile', {})
+        )
+        if isinstance(profile, dict) and profile.get('profile_confidence'):
+            return profile
+    return {}
+
+
 def _load_candidate_context(product_ids):
     context = {}
     if not PACKETS_AVAILABLE:
@@ -520,6 +545,8 @@ def _load_candidate_context(product_ids):
                 'price': float(product.price or 0),
                 'best_for': getattr(content, 'best_for', '') if content else '',
                 'fit_summary': getattr(content, 'fit_summary', '') if content else '',
+                'key_highlights': getattr(content, 'key_highlights', []) if content else [],
+                'salesperson_tips': getattr(content, 'salesperson_tips', []) if content else [],
                 'specs': features_by_product.get(product.product_id, []),
             }
     except Exception as exc:
@@ -538,6 +565,15 @@ def _build_rerank_prompt(session, answers, scored_products, candidate_context):
         scored_products[0].get('scoring_breakdown', {}).get('requirement_profile', {})
         if scored_products else {}
     )
+    preference_profile = _extract_preference_profile(scored_products)
+    if preference_profile:
+        parts.append("\nStructured preference profile:")
+        parts.append(json.dumps(preference_profile, ensure_ascii=True, indent=2)[:4000])
+        parts.append(
+            "Interpretation: profile_fit and semantic signals should drive the final ordering when they better match "
+            "the customer than the base numeric rank."
+        )
+
     if first_profile:
         parts.append(
             "Requirement profile: "
@@ -593,6 +629,12 @@ def _build_rerank_prompt(session, answers, scored_products, candidate_context):
                 parts.append(f"  Best for (descriptive only): {product_context['best_for']}")
             if product_context.get('fit_summary'):
                 parts.append(f"  Fit summary (descriptive only): {product_context['fit_summary']}")
+            highlights = product_context.get('key_highlights') or []
+            if highlights:
+                parts.append("  Key highlights: " + ", ".join(str(item) for item in highlights[:5]))
+            tips = product_context.get('salesperson_tips') or []
+            if tips:
+                parts.append("  Salesperson context: " + " | ".join(str(item) for item in tips[:2]))
             specs = product_context.get('specs', [])[:8]
             for spec in specs:
                 parts.append(f"  {spec['label']}: {spec['value']}")
@@ -613,18 +655,24 @@ def _build_rerank_prompt(session, answers, scored_products, candidate_context):
             )
         capability_metrics = [
             f"capability={feature_scores.get('capability', {}).get('fit', 0):.2f}",
+            f"profile_fit={feature_scores.get('profile_fit', {}).get('fit', 0):.2f}",
             f"right_sized_performance={feature_scores.get('right_sized_performance', {}).get('fit', 0):.2f}",
             f"value_for_money={feature_scores.get('value_for_money', {}).get('fit', 0):.2f}",
             f"overkill_risk={feature_scores.get('performance_overkill_risk', {}).get('fit', 0):.2f}",
             f"undershoot_risk={feature_scores.get('performance_undershoot_risk', {}).get('fit', 0):.2f}",
             f"portability={feature_scores.get('portability', {}).get('fit', 0):.2f}",
+            f"readability={feature_scores.get('readability', {}).get('fit', 0):.2f}",
+            f"media_comfort={feature_scores.get('media_comfort', {}).get('fit', 0):.2f}",
+            f"audio_quality={feature_scores.get('audio_quality', {}).get('fit', 0):.2f}",
+            f"simplicity={feature_scores.get('simplicity', {}).get('fit', 0):.2f}",
+            f"touch_flexibility={feature_scores.get('touch_flexibility', {}).get('fit', 0):.2f}",
+            f"business_orientation={feature_scores.get('business_orientation', {}).get('fit', 0):.2f}",
         ]
         parts.append("  Fit-to-need signals: " + ", ".join(capability_metrics))
 
     parts.append(
         "\nSelect the best 3 products for this customer. "
-        "Use the answers to avoid overkill and to prefer the right-sized fit. "
-        "Default to the scorer's current top 3 unless a nearby alternative is clearly more appropriate."
+        "Use the structured preference profile to avoid overkill and to prefer the best human fit from the candidate pool."
     )
     return "\n".join(parts)
 
@@ -1001,6 +1049,185 @@ def _build_implications(matched_benefits, trade_offs):
         if item:
             implications.append(item)
     return implications[:4]
+
+
+def _contextual_recommendation_label(
+    *,
+    fit_label='',
+    matched_benefits=None,
+    key_highlights=None,
+    fit_summary='',
+    fallback='',
+):
+    """
+    Build the small top-right card badge from session-specific rationale.
+
+    ProductContent.best_for is catalog positioning and can be misleading on a
+    recommendation card; the badge should explain this recommendation in the
+    current customer's context.
+    """
+    candidates = [
+        fit_label,
+        fit_summary,
+        *((key_highlights or [])[:2]),
+        *((matched_benefits or [])[:2]),
+        fallback,
+    ]
+
+    for candidate in candidates:
+        label = _compact_badge_label(candidate)
+        if label:
+            return label
+    return 'Recommended fit'
+
+
+def _dedupe_recommendation_badges(items):
+    seen = {}
+    for item in items:
+        label = _sanitize_customer_facing_text(item.get('best_for', ''))
+        normalized = re.sub(r'[^a-z0-9]+', ' ', label.lower()).strip()
+        if not normalized:
+            continue
+        seen.setdefault(normalized, []).append(item)
+
+    for duplicates in seen.values():
+        if len(duplicates) <= 1:
+            continue
+        for item in duplicates:
+            item['best_for'] = _differentiated_recommendation_badge(item)
+
+    for item in items:
+        if _badge_needs_differentiation(item.get('best_for', '')):
+            item['best_for'] = _differentiated_recommendation_badge(item)
+
+
+def _badge_needs_differentiation(label):
+    text = _sanitize_customer_facing_text(label).lower()
+    if not text:
+        return True
+    generic_fragments = [
+        'parent-friendly',
+        'student-friendly',
+        'everyday tasks',
+        'daily tasks',
+        'daily use',
+        'recommended for your needs',
+        'matches your needs',
+    ]
+    return any(fragment in text for fragment in generic_fragments)
+
+
+def _differentiated_recommendation_badge(item):
+    family = str(item.get('family') or '').lower()
+    model = str(item.get('model') or '').lower()
+    breakdown = item.get('scoring_breakdown') if isinstance(item.get('scoring_breakdown'), dict) else {}
+    feature_scores = breakdown.get('feature_scores', {}) if isinstance(breakdown, dict) else {}
+
+    def fit(code):
+        try:
+            return float(feature_scores.get(code, {}).get('fit', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    weight = fit('weight')
+    battery = fit('battery')
+    simplicity = fit('simplicity')
+    readability = fit('readability')
+    media = fit('media_comfort')
+    connectivity = fit('connectivity')
+    build = fit('build_quality')
+    value = fit('value_for_money')
+    touch = fit('touch_flexibility')
+    display = fit('display_size')
+    processor = fit('processor')
+    ram = fit('ram')
+    graphics = fit('graphics')
+    premium = fit('premium_experience')
+
+    if 'legion' in family or 'loq' in family:
+        if graphics >= 0.95:
+            return 'High-end GPU performance pick'
+        return 'Gaming and creator performance pick'
+
+    if 'thinkpad p' in family:
+        if graphics >= 0.85:
+            return 'Professional workstation power'
+        return 'Technical work and coding reliability'
+
+    if 'yoga' in family:
+        if touch >= 0.75:
+            return 'Premium flexible viewing option'
+        if weight >= 0.88:
+            return 'Premium ultra-light carry option'
+        if media >= 0.75 or readability >= 0.7:
+            return 'Premium display and comfort pick'
+
+    if 'thinkpad x1' in family:
+        return 'Flagship lightweight business option'
+
+    if 'thinkpad x' in family:
+        return 'Compact business travel option'
+
+    if 'thinkpad' in family:
+        if display >= 0.8:
+            return 'Reliable large-screen business pick'
+        return 'Durable business reliability pick'
+
+    if 'thinkbook' in family:
+        if touch >= 0.7:
+            return 'Flexible business everyday option'
+        if connectivity >= 0.84 and build >= 0.7:
+            return 'Business-grade reliability and ports'
+        return 'Modern business everyday option'
+
+    if 'ideapad flex' in family:
+        return 'Flexible touch everyday pick'
+
+    if 'ideapad' in family:
+        if display >= 0.8:
+            return 'Large-screen simple home pick'
+        if weight >= 0.72 and simplicity >= 0.62:
+            return 'Simple lightweight everyday pick'
+        if value >= 0.62:
+            return 'Good-value everyday pick'
+
+    if 'chromebook' in family:
+        return 'Simple web-first tablet option'
+
+    if processor >= 0.78 and ram >= 0.78:
+        return 'Strong multitasking performance pick'
+    if weight >= 0.78:
+        return 'Lightweight everyday carry pick'
+    if battery >= 0.78:
+        return 'Long-battery everyday pick'
+    return _compact_badge_label(item.get('fit_summary') or item.get('catalog_best_for')) or 'Recommended fit'
+
+
+def _compact_badge_label(value, max_chars=74):
+    text = _sanitize_customer_facing_text(value)
+    if not text:
+        return ''
+
+    text = re.sub(r'^(great|strong|excellent|solid)\s+match\s+for\s+', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^(a|an|the)\s+', '', text, flags=re.IGNORECASE)
+    text = text.strip(' .,:;-')
+    if not text:
+        return ''
+
+    if len(text) <= max_chars:
+        return text[:1].upper() + text[1:]
+
+    separators = [' with ', ' while ', ' because ', ' for ', ',']
+    for separator in separators:
+        index = text.lower().find(separator)
+        if 18 <= index <= max_chars:
+            text = text[:index]
+            break
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(' ', 1)[0]
+
+    text = text.strip(' .,:;-')
+    return text[:1].upper() + text[1:] if text else ''
 
 
 def _sanitize_customer_facing_text(value):

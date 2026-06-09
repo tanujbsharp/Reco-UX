@@ -25,6 +25,8 @@ interface JourneyContextType {
   setSessionId: (id: number | null) => void;
   voiceTags: VoiceTag[];
   setVoiceTags: (tags: VoiceTag[]) => void;
+  detectedArchetype: string;
+  setDetectedArchetype: (value: string) => void;
   discoveryText: string;
   setDiscoveryText: (value: string) => void;
   detectedLanguage: string;
@@ -72,6 +74,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     }
   };
   const [voiceTags, setVoiceTags] = useState<VoiceTag[]>([]);
+  const [detectedArchetype, setDetectedArchetype] = useState("");
   const [discoveryText, setDiscoveryText] = useState("");
   const [detectedLanguage, setDetectedLanguage] = useState("");
   const [discoveryMode, setDiscoveryMode] = useState<"voice" | "text">("voice");
@@ -136,6 +139,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
 
   const resetJourneyProgress = () => {
     setVoiceTags([]);
+    setDetectedArchetype("");
     setDiscoveryText("");
     setDetectedLanguage("");
     setAnswers([]);
@@ -162,6 +166,8 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
         setSessionId,
         voiceTags,
         setVoiceTags,
+        detectedArchetype,
+        setDetectedArchetype,
         discoveryText,
         setDiscoveryText,
         detectedLanguage,

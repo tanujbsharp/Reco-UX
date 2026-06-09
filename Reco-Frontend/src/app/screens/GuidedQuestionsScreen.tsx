@@ -117,10 +117,46 @@ function ensureOtherOption(question: Question): Question {
   };
 }
 
+const fallbackGuidedQuestions: Question[] = [
+  {
+    id: "fallback-q1",
+    type: "single-choice",
+    question: "Who is the primary user for this laptop?",
+    options: [
+      { label: "Myself", description: "I am choosing for my own use", icon: "CircleHelp" },
+      { label: "My spouse or partner", description: "For my husband, wife, or partner", icon: "CircleHelp" },
+      { label: "My parent", description: "For my mother, father, or an older parent", icon: "CircleHelp" },
+      { label: "My child who is a student", description: "For school, college, or academic use", icon: "BookOpen" },
+      { label: "My sibling or another family member", description: "For someone else in the family", icon: "CircleHelp" },
+      { label: "My team or employee", description: "For work or business use by someone else", icon: "BriefcaseBusiness" },
+      { label: "A shared family device", description: "More than one person will use it regularly", icon: "Laptop2" },
+    ],
+  },
+  {
+    id: "fallback-q2",
+    type: "multi-choice",
+    question: "What will it mainly be used for?",
+    options: [
+      { label: "Study and assignments", description: "Schoolwork, notes, research, and projects", icon: "BookOpen" },
+      { label: "College classes and project work", description: "Presentations, coursework, and submissions", icon: "BookOpen" },
+      { label: "Work and productivity", description: "Docs, spreadsheets, browsing, and multitasking", icon: "BriefcaseBusiness" },
+      { label: "Coding and software development", description: "Development tools, terminals, and local builds", icon: "Code2" },
+      { label: "Content creation and design", description: "Design, editing, and creative tools", icon: "Clapperboard" },
+      { label: "Video editing, 3D, or CAD", description: "Heavier creative or technical workloads", icon: "Clapperboard" },
+      { label: "Gaming and esports", description: "Casual to competitive gaming needs", icon: "Gauge" },
+      { label: "Streaming and content consumption", description: "Movies, YouTube, OTT, and music", icon: "MonitorSpeaker" },
+      { label: "Remote work and video calls", description: "Meetings, collaboration, and home-office use", icon: "ScreenShare" },
+      { label: "Business travel and presentations", description: "Frequent carry, travel, and client meetings", icon: "Backpack" },
+      { label: "Everyday browsing and home use", description: "Simple daily use for general tasks", icon: "Laptop2" },
+      { label: "Shared family use", description: "A mix of different household needs", icon: "CircleHelp" },
+    ],
+  },
+  ...mockQuestions.slice(2, 5),
+].map((question) => ensureOtherOption(question));
+
 export function GuidedQuestionsScreen() {
   const navigate = useNavigate();
   const { voiceTags, answers, addAnswer, journeyEntryMode, sessionId } = useJourney();
-  const generalQuestions = useMemo(() => mockQuestions.map((question) => ensureOtherOption(question)), []);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [selectedValue, setSelectedValue] = useState<string | string[] | null>(null);
@@ -135,14 +171,12 @@ export function GuidedQuestionsScreen() {
   const additionalMediaStreamRef = useRef<MediaStream | null>(null);
   const additionalAudioChunksRef = useRef<Blob[]>([]);
   const directGuidedEntry = journeyEntryMode === "guided";
-  const shouldUseGeneralQuestions = directGuidedEntry || !sessionId;
 
-  // API-driven questions: one at a time from LLM, except direct guided entry which stays on the default general set.
-  const [questions, setQuestions] = useState<Question[]>(shouldUseGeneralQuestions ? generalQuestions : []);
-  const [questionsLoading, setQuestionsLoading] = useState(Boolean(sessionId && !directGuidedEntry));
+  const [questions, setQuestions] = useState<Question[]>(sessionId ? [] : fallbackGuidedQuestions);
+  const [questionsLoading, setQuestionsLoading] = useState(Boolean(sessionId));
   const [questionsError, setQuestionsError] = useState<string | null>(null);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
-  const [usingLLMQuestions, setUsingLLMQuestions] = useState(Boolean(sessionId && !directGuidedEntry));
+  const [usingLLMQuestions, setUsingLLMQuestions] = useState(Boolean(sessionId));
   const [estimatedTotalQuestions, setEstimatedTotalQuestions] = useState(5);
 
   // Helper: map an LLM question response to our Question format
@@ -178,11 +212,20 @@ export function GuidedQuestionsScreen() {
     });
   };
 
-  // Fetch the FIRST question from LLM on mount
   useEffect(() => {
-    if (!sessionId || directGuidedEntry) return;
+    if (!sessionId) {
+      setQuestions(fallbackGuidedQuestions);
+      setQuestionsLoading(false);
+      setQuestionsError("Using offline questions.");
+      setUsingLLMQuestions(false);
+      setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
+      return;
+    }
+
     let cancelled = false;
     setQuestionsLoading(true);
+    setQuestionsError(null);
+
     getFirstQuestion(sessionId)
       .then((data) => {
         if (cancelled) return;
@@ -196,38 +239,26 @@ export function GuidedQuestionsScreen() {
           // LLM already has enough info — skip straight to recommendations
           navigate("/processing");
         } else {
-          // Unexpected response — fall back to mock
-          console.warn("LLM returned no question, falling back to mock questions");
-          setQuestions(generalQuestions);
+          console.warn("LLM returned no question, falling back to offline questions");
+          setQuestions(fallbackGuidedQuestions);
           setUsingLLMQuestions(false);
+          setQuestionsError("Using offline questions.");
+          setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
         }
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Failed to fetch first question from LLM, using mock:", err);
+        console.error("Failed to fetch first question from LLM, using offline questions:", err);
         setQuestionsError("Using offline questions.");
-        setQuestions(generalQuestions);
+        setQuestions(fallbackGuidedQuestions);
         setUsingLLMQuestions(false);
+        setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
       })
       .finally(() => {
         if (!cancelled) setQuestionsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [directGuidedEntry, generalQuestions, navigate, sessionId]);
-
-  useEffect(() => {
-    if (!directGuidedEntry) {
-      return;
-    }
-
-    setQuestions(generalQuestions);
-    setQuestionsLoading(false);
-    setQuestionsError(null);
-    setUsingLLMQuestions(false);
-    setCurrentIndex(0);
-    setShowAdditionalSpecsStep(false);
-    setEstimatedTotalQuestions(generalQuestions.length);
-  }, [directGuidedEntry, generalQuestions]);
+  }, [navigate, sessionId]);
 
   useEffect(() => {
     if (!(questionsLoading || isSubmittingAnswer)) {

@@ -32,6 +32,11 @@ from apps.recommendations.fit_profiles import (
     compute_right_sized_performance_fit,
     compute_session_value_for_money,
 )
+from apps.recommendations.preference_profile import (
+    build_preference_profile,
+    build_product_semantic_features,
+    compute_preference_profile_fit,
+)
 from apps.recommendations.preference_inference import (
     infer_answer_score_effect,
     infer_tag_weight_adjustments,
@@ -111,6 +116,20 @@ class RecommendationScorer:
         'right_sized_performance': 0.0,
         'performance_overkill_risk': 0.0,
         'performance_undershoot_risk': 0.0,
+        'profile_fit': 0.0,
+        'media_comfort': 0.0,
+        'audio_quality': 0.0,
+        'readability': 0.0,
+        'simplicity': 0.0,
+        'touch_flexibility': 0.0,
+        'couch_comfort': 0.0,
+        'shared_viewing': 0.0,
+        'premium_experience': 0.0,
+        'business_orientation': 0.0,
+        'creator_orientation': 0.0,
+        'gaming_orientation': 0.0,
+        'bulk_risk': 0.0,
+        'complexity_risk': 0.0,
     }
 
     def _weight_floor_for_feature(self, feature_code):
@@ -124,6 +143,11 @@ class RecommendationScorer:
             .order_by('created_at')
         )
         self.voice_tags = self._extract_voice_tags()
+        self.preference_profile = build_preference_profile(
+            self.session,
+            self.answers,
+            self.voice_tags,
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -151,6 +175,7 @@ class RecommendationScorer:
 
         # Step 3: Adjust weights from session answers / benefit mappings
         weights = self._apply_answer_adjustments(weights)
+        weights = self._apply_preference_profile_adjustments(weights)
 
         # Step 4: Load products and calculate base scores
         products = self._load_products()
@@ -214,6 +239,13 @@ class RecommendationScorer:
                 effect = answer.score_effect
                 if isinstance(effect, dict) and 'tags' in effect:
                     tags.extend(effect['tags'])
+                    detected_archetype = str(effect.get('detected_archetype', '')).strip()
+                    if detected_archetype:
+                        tags.append({
+                            'text': detected_archetype,
+                            'category': 'user-archetype',
+                            'confidence': effect.get('detected_archetype_confidence', 0.0),
+                        })
                 elif isinstance(effect, list):
                     tags.extend(effect)
         return tags
@@ -348,6 +380,100 @@ class RecommendationScorer:
 
         return weights
 
+    def _apply_preference_profile_adjustments(self, weights):
+        """
+        Add profile-driven semantic dimensions to the scoring space.
+
+        The LLM profile chooses generic feature priorities; this method only
+        translates those priorities into scorer weights so the scorer can rank
+        products using the same product feature matrix as the rest of the app.
+        """
+        profile = getattr(self, 'preference_profile', {}) or {}
+        if not profile:
+            return weights
+
+        weights = dict(weights)
+        confidence = max(0.35, min(1.0, float(profile.get('profile_confidence', 0.55) or 0.55)))
+        feature_priorities = profile.get('feature_priorities', {}) or {}
+        anti_priorities = profile.get('anti_priorities', {}) or {}
+
+        for feature_code, raw_priority in feature_priorities.items():
+            try:
+                priority = max(0.0, min(1.0, float(raw_priority or 0.0)))
+            except (TypeError, ValueError):
+                continue
+            current = weights.get(feature_code, self._weight_floor_for_feature(feature_code))
+            weights[feature_code] = max(0.0, min(1.6, current + priority * confidence * 0.55))
+
+        # Anti-priority signals are handled as penalties inside profile_fit.
+        # Give profile_fit itself enough weight to influence ordering even
+        # when catalog metadata contains dimensions that are not in default
+        # scoring configs, such as simplicity, media comfort, or touch use.
+        if feature_priorities or anti_priorities:
+            weights['profile_fit'] = max(weights.get('profile_fit', 0.0), 1.15 * confidence)
+
+        if self._is_capability_seeking_profile(profile):
+            weights = self._apply_capability_weight_calibration(weights, profile, confidence)
+
+        return weights
+
+    def _is_capability_seeking_profile(self, profile):
+        usage_modes = set(profile.get('primary_usage_modes', []) or [])
+        try:
+            performance = float(profile.get('performance_need_level', 0.0) or 0.0)
+            overkill_tolerance = float(profile.get('overkill_tolerance', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return False
+        capability_modes = {'gaming', 'creative', 'coding', 'productivity', 'remote_work'}
+        return bool(usage_modes & capability_modes) and performance >= 0.78 and overkill_tolerance >= 0.65
+
+    def _apply_capability_weight_calibration(self, weights, profile, confidence):
+        """
+        For explicit headroom/performance profiles, stronger relevant specs are
+        part of fit. Keep value as a tie-breaker unless the profile asks for it.
+        """
+        weights = dict(weights)
+        usage_modes = set(profile.get('primary_usage_modes', []) or [])
+        value_sensitivity = float(profile.get('value_sensitivity', 0.0) or 0.0)
+        heavy_visual = bool(usage_modes & {'gaming', 'creative'})
+        work_heavy = bool(usage_modes & {'coding', 'productivity', 'remote_work'})
+
+        floors = {
+            'processor': 1.45,
+            'ram': 1.22 if work_heavy else 1.0,
+            'storage': 0.72 if work_heavy else 0.48,
+            'creative_headroom': 1.0 if heavy_visual or work_heavy else 0.72,
+            'premium_experience': 0.86,
+            'build_quality': 1.02,
+            'profile_fit': 1.25 * confidence,
+        }
+        if heavy_visual:
+            floors['graphics'] = 1.6 if 'gaming' in usage_modes else 1.28
+            floors['display_size'] = 1.42
+        elif work_heavy:
+            floors['display_size'] = 1.12
+        if 'gaming' in usage_modes:
+            floors['gaming_orientation'] = 1.05
+        if work_heavy:
+            floors['connectivity'] = 0.82
+
+        for feature_code, floor in floors.items():
+            weights[feature_code] = max(weights.get(feature_code, 0.0), floor)
+
+        if value_sensitivity < 0.38:
+            caps = {
+                'price': 0.18,
+                'value_for_money': 0.38,
+                'everyday_fit': 0.3,
+                'simplicity': 0.18,
+                'right_sized_performance': 0.46,
+            }
+            for feature_code, cap in caps.items():
+                if feature_code in weights:
+                    weights[feature_code] = min(weights.get(feature_code, 0.0), cap)
+
+        return weights
+
     def _load_products(self):
         """
         Load products for this session's packet.
@@ -372,16 +498,40 @@ class RecommendationScorer:
                 return self._get_stub_products()
 
             result = []
+            content_by_product = {}
+            try:
+                from apps.packets.models import ProductContent
+                content_by_product = {
+                    content.product_id: content
+                    for content in ProductContent.objects.filter(product__in=products)
+                }
+            except Exception:
+                content_by_product = {}
+
             for product in products:
                 features = {}
+                raw_feature_values = []
                 try:
                     fv_qs = FeatureValue.objects.filter(product=product).select_related('feature')
                     for fv in fv_qs:
+                        raw_feature_values.append(
+                            f"{fv.feature.feature_name}: {str(fv.value or '').strip()}"
+                        )
                         if fv.normalized_value is None:
                             continue
                         features[fv.feature.feature_code] = fv.normalized_value
                 except Exception:
                     pass
+
+                content = content_by_product.get(product.product_id)
+                content_parts = []
+                if content:
+                    content_parts.extend([
+                        getattr(content, 'best_for', '') or '',
+                        getattr(content, 'fit_summary', '') or '',
+                        ' '.join(getattr(content, 'key_highlights', []) or []),
+                        ' '.join(getattr(content, 'salesperson_tips', []) or []),
+                    ])
 
                 result.append({
                     'product_id': product.product_id,
@@ -389,6 +539,12 @@ class RecommendationScorer:
                     'family': product.family,
                     'price': float(product.price),
                     'features': features,
+                    'product_text': ' | '.join([
+                        product.model,
+                        product.family,
+                        *raw_feature_values,
+                        *content_parts,
+                    ]),
                 })
             return self._add_derived_features(result)
 
@@ -494,6 +650,18 @@ class RecommendationScorer:
             features['performance_overkill_risk'] = 0.0
             features['performance_undershoot_risk'] = 0.0
 
+            semantic_features = build_product_semantic_features(
+                product.get('product_text', ''),
+                features,
+            )
+            features.update(semantic_features)
+            profile_fit, profile_fit_details = compute_preference_profile_fit(
+                features,
+                getattr(self, 'preference_profile', {}) or {},
+            )
+            features['profile_fit'] = round(profile_fit, 3)
+            product['preference_profile_fit'] = profile_fit_details
+
         return products
 
     def _apply_requirement_profile(self, products):
@@ -521,6 +689,12 @@ class RecommendationScorer:
             features['performance_overkill_risk'] = performance_details['overkill_risk']
             features['performance_undershoot_risk'] = performance_details['undershoot_risk']
             product['session_fit_profile'] = performance_details
+            profile_fit, profile_fit_details = compute_preference_profile_fit(
+                features,
+                getattr(self, 'preference_profile', {}) or {},
+            )
+            features['profile_fit'] = round(profile_fit, 3)
+            product['preference_profile_fit'] = profile_fit_details
 
         return products
 
@@ -574,6 +748,8 @@ class RecommendationScorer:
                     'feature_scores': feature_scores,
                     'weights_used': {k: round(v, 3) for k, v in weights.items()},
                     'requirement_profile': getattr(self, 'requirement_profile', {}),
+                    'preference_profile': getattr(self, 'preference_profile', {}),
+                    'preference_profile_fit': product.get('preference_profile_fit', {}),
                     'session_fit_profile': product.get('session_fit_profile', {}),
                 },
                 'disqualified': False,
@@ -660,8 +836,15 @@ class RecommendationScorer:
                 for feature_code, detail in feature_scores.items()
             }
             intent_fit, intent_details = compute_intent_fit(features, intent_profile)
+            profile_fit, profile_fit_details = compute_preference_profile_fit(
+                features,
+                getattr(self, 'preference_profile', {}) or {},
+            )
             raw_fit = max(0.0, min(1.0, float(product.get('match_percentage', 0) or 0) / 100.0))
-            final_fit = max(0.0, min(1.0, raw_fit * 0.45 + intent_fit * 0.55))
+            if getattr(self, 'preference_profile', None):
+                final_fit = max(0.0, min(1.0, raw_fit * 0.25 + intent_fit * 0.30 + profile_fit * 0.45))
+            else:
+                final_fit = max(0.0, min(1.0, raw_fit * 0.45 + intent_fit * 0.55))
             max_possible = sum(
                 float(detail.get('weight', 0.0) or 0.0)
                 for detail in feature_scores.values()
@@ -669,6 +852,11 @@ class RecommendationScorer:
             product['final_score'] = round(final_fit * max_possible, 4)
             product['match_percentage'] = int(round(final_fit * 100))
             breakdown['intent_profile'] = intent_profile
+            breakdown['preference_profile'] = getattr(self, 'preference_profile', {}) or {}
+            breakdown['preference_profile_fit'] = {
+                'fit': round(profile_fit, 3),
+                **profile_fit_details,
+            }
             breakdown['intent_fit'] = {
                 'fit': round(intent_fit, 3),
                 **intent_details,
@@ -912,6 +1100,14 @@ class RecommendationScorer:
                     'max_gap_percent': max_gap_percent,
                     'gap_to_top': gap,
                 }
+
+        # For explicit capability/headroom profiles, family diversity is less
+        # important than keeping the strongest fit-to-need machines together.
+        if self._is_capability_seeking_profile(getattr(self, 'preference_profile', {}) or {}):
+            for rank_idx, product in enumerate(scored):
+                product['rank'] = rank_idx + 1
+                product['match_percentage'] = min(100, max(0, product['match_percentage']))
+            return scored
 
         # Diversity rule: no more than 2 from the same family in top 3
         final = []

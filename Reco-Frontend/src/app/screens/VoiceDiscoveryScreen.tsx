@@ -37,6 +37,7 @@ export function VoiceDiscoveryScreen() {
     setDiscoveryMode,
     discoveryText,
     setDiscoveryText,
+    setDetectedArchetype,
     detectedLanguage,
     setDetectedLanguage,
     setVoiceTags,
@@ -85,18 +86,21 @@ export function VoiceDiscoveryScreen() {
     setDiscoveryMode(mode);
     setDiscoveryText(value);
     setDetectedLanguage("");
+    setDetectedArchetype("");
     setApiError(null);
     stopIntervals();
 
     try {
       const result = await analyzeText(value);
       setVoiceTags(mapTags(result.tags));
+      setDetectedArchetype(result.archetype?.label ?? "");
       navigate("/voice-results");
     } catch (err) {
       console.error("analyzeText API failed, falling back to mock tags:", err);
       setApiError("Could not reach the server. Using offline analysis.");
       // Fallback to mock tags
       setVoiceTags(mockExtractedTags);
+      setDetectedArchetype("");
       navigate("/voice-results");
     }
   };
@@ -162,6 +166,7 @@ export function VoiceDiscoveryScreen() {
           setDetectedLanguage(result.language?.trim() || "");
           setDiscoveryText(transcript);
           setVoiceTags(mapTags(result.tags));
+          setDetectedArchetype(result.archetype?.label ?? "");
           setState("processing");
           navigate("/voice-results");
         } catch (error) {
@@ -387,7 +392,6 @@ export function VoiceDiscoveryScreen() {
                       {state === "processing" && "Turning speech into recommendation signals..."}
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
-                      {state === "idle" && "You can stop anytime once the key needs are captured."}
                       {state === "recording" && formatDuration(elapsedSeconds)}
                       {(state === "transcribing" || state === "processing") && "Preparing the editable understanding card"}
                     </div>
@@ -441,9 +445,6 @@ export function VoiceDiscoveryScreen() {
                   disabled={state === "processing"}
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm leading-6 text-slate-500">
-                    Typed input follows the same flow: we extract the details first, then move into confirmation and adaptive questions.
-                  </p>
                   <Button
                     size="lg"
                     onClick={handleTextSubmit}

@@ -9,6 +9,7 @@ product's features.
 Output per product:
     - whyRecommended   (str)
     - fitSummary       (str)
+    - fitLabel         (str)
     - keyHighlights    (list[str])
     - matchedBenefits  (list[str])
     - tradeOffs        (list[str])
@@ -41,12 +42,16 @@ EXPLANATION_SYSTEM_PROMPT = (
     "{\n"
     '  "whyRecommended": "string — 1-2 sentence summary of why this product fits",\n'
     '  "fitSummary": "string — brief overall fit assessment",\n'
+    '  "fitLabel": "string — 3-8 word customer-context badge for the recommendation card",\n'
     '  "keyHighlights": ["string — key product highlight relevant to customer", ...],\n'
     '  "matchedBenefits": ["string — benefit that matches customer need", ...],\n'
     '  "tradeOffs": ["string — honest trade-off to be aware of", ...],\n'
     '  "pros": ["string — advantage of this product", ...],\n'
     '  "cons": ["string — disadvantage or limitation", ...]\n'
     "}\n\n"
+    "The fitLabel must describe why this product fits THIS customer, not the product's generic catalog positioning. "
+    "For example, prefer labels like 'Student coding and AI coursework' or 'Parent-friendly streaming and browsing' "
+    "over generic labels like 'Premium video watching' when that is not the customer's main use case.\n\n"
     "Do NOT include any text outside the JSON object."
 )
 
@@ -208,6 +213,7 @@ def _parse_explanation_response(raw_response, product_result):
     defaults = {
         'whyRecommended': '',
         'fitSummary': '',
+        'fitLabel': '',
         'keyHighlights': [],
         'matchedBenefits': [],
         'tradeOffs': [],
@@ -233,6 +239,7 @@ def _fallback_explanation(product_result):
             'you described.'
         ),
         'fitSummary': 'A strong overall fit based on the preferences you shared.',
+        'fitLabel': 'Recommended for your needs',
         'keyHighlights': [
             'Matches your stated requirements',
             'Scored well across key features',

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Check, CheckCheck, Edit2, Keyboard, Loader2, Mic, Plus, X } from "lucide-react";
+import { Check, Edit2, Keyboard, Loader2, Mic, Plus, X } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
@@ -42,15 +42,32 @@ function splitManualTagInput(text: string) {
     .filter((part) => part.length > 0);
 }
 
+function formatArchetypeLabel(value: string) {
+  return value
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function VoiceResultsScreen() {
   const navigate = useNavigate();
-  const { discoveryMode, discoveryText, voiceTags, setVoiceTags, sessionId, detectedLanguage } = useJourney();
+  const {
+    discoveryMode,
+    discoveryText,
+    voiceTags,
+    setVoiceTags,
+    sessionId,
+    detectedLanguage,
+    detectedArchetype,
+    setDetectedArchetype,
+  } = useJourney();
   const [tags, setTags] = useState(voiceTags);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newTagText, setNewTagText] = useState("");
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
+  const [detectedArchetypeConfidence, setDetectedArchetypeConfidence] = useState<number | null>(null);
 
   const [hoveredTagId, setHoveredTagId] = useState<string | null>(null);
 
@@ -107,6 +124,11 @@ export function VoiceResultsScreen() {
       if (analyzedTags.length > 0) {
         nextTags = analyzedTags;
       }
+
+      if (result.archetype?.label) {
+        setDetectedArchetype(result.archetype.label);
+        setDetectedArchetypeConfidence(result.archetype.confidence ?? null);
+      }
     } catch (err) {
       console.error("Failed to auto-categorize tag, using fallback:", err);
       setTagError("Could not reach the server, so we categorized it locally.");
@@ -119,6 +141,27 @@ export function VoiceResultsScreen() {
 
   const handleContinue = async () => {
     setVoiceTags(tags);
+    const combinedSignalText = [
+      discoveryText,
+      ...tags.map((tag) => `${tag.category} ${tag.text}`),
+    ]
+      .join(". ")
+      .trim();
+
+    let finalArchetype = detectedArchetype;
+    let finalArchetypeConfidence = detectedArchetypeConfidence;
+    if (combinedSignalText) {
+      try {
+        const refreshedAnalysis = await analyzeText(combinedSignalText);
+        finalArchetype = refreshedAnalysis.archetype?.label ?? "";
+        finalArchetypeConfidence = refreshedAnalysis.archetype?.confidence ?? null;
+        setDetectedArchetype(finalArchetype);
+        setDetectedArchetypeConfidence(finalArchetypeConfidence);
+      } catch (err) {
+        console.error("Failed to refresh archetype from detected inputs:", err);
+      }
+    }
+
     // Save confirmed tags + discovery text to backend session
     // so the LLM question orchestrator can use them
     if (sessionId) {
@@ -126,7 +169,14 @@ export function VoiceResultsScreen() {
       try {
         await submitAnswer(sessionId, {
           question_text: "Customer discovery brief",
-          answer_value: tagSummary ? `${discoveryText} | Tags: ${tagSummary}` : discoveryText,
+          answer_value:
+            [
+              discoveryText,
+              tagSummary ? `Tags: ${tagSummary}` : "",
+              finalArchetype ? `Detected archetype: ${formatArchetypeLabel(finalArchetype)}` : "",
+            ]
+              .filter(Boolean)
+              .join(" | "),
           from_voice: true,
           score_effect: {
             discovery_mode: discoveryMode,
@@ -135,6 +185,8 @@ export function VoiceResultsScreen() {
               text: tag.text,
               category: tag.category,
             })),
+            detected_archetype: finalArchetype || undefined,
+            detected_archetype_confidence: finalArchetypeConfidence ?? undefined,
           },
         });
       } catch (err) {
@@ -199,14 +251,9 @@ export function VoiceResultsScreen() {
         <GlowCard customSize className="w-full flex-1 flex flex-col">
           <div className="min-h-full p-8 md:p-12 space-y-12">
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 text-center">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-              <CheckCheck className="h-3.5 w-3.5" />
-              {discoveryMode === "voice" ? "Voice understood" : "Typed note understood"}
-            </div>
             <div>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">Here&apos;s what we picked up</h1>
               <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-600">
-                Review the key PC-buying signals we extracted. Keep what feels right, remove what doesn&apos;t, and edit anything that needs a better phrase.
               </p>
             </div>
           </motion.div>
@@ -216,9 +263,9 @@ export function VoiceResultsScreen() {
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-2xl font-semibold text-slate-950">Detected preferences</h2>
+                  <h2 className="text-2xl font-semibold text-slate-950">Detected inputs</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    {discoveryMode === "voice" ? "From the voice capture" : "From the typed note"}.
+                    {discoveryMode === "voice" ? "From the voice capture" : "From the typed note"} and any manual tags you add here.
                   </p>
                 </div>
                 <Badge variant="outline" className="rounded-full border-slate-200 px-3 py-1 text-slate-600">
@@ -226,6 +273,16 @@ export function VoiceResultsScreen() {
                   {discoveryMode === "voice" ? `Detected: ${detectedLanguage || "Speech"}` : "Typed input"}
                 </Badge>
               </div>
+
+              {detectedArchetype ? (
+                <div className="rounded-[26px] border border-violet-200 bg-violet-50/70 p-4">
+                  <div className="text-[12px] font-bold uppercase tracking-wider text-violet-500">Detected user type</div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900">{formatArchetypeLabel(detectedArchetype)}</div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This will influence the follow-up questions and the final recommendations.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="grid gap-4">
                 {tags.map((tag, index) => (

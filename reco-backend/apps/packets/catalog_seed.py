@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 
 from django.db import transaction
 
+from apps.packets.lenovo_psref_catalog import psref_products
 from apps.packets.models import (
     Accessory,
     BenefitMapping,
@@ -111,7 +112,7 @@ PRODUCTS: list[dict[str, Any]] = [
         },
         "content": {
             "best_for": "College, commuting, and flexible everyday use",
-            "fit_summary": "A better fit than business-heavy models when someone wants a lighter everyday laptop for study, browsing, streaming, Office work, and the occasional creative task without carrying extra weight.",
+            "fit_summary": "A better fit than business-heavy models when someone wants a lighter everyday laptop for study, browsing, streaming, Office work, and light casual edits without carrying extra weight.",
             "key_highlights": ["1.4 kg carry", "Privacy shutter", "Good everyday port mix"],
             "salesperson_tips": [
                 "Position this for shoppers who want a nicer daily-carry experience than entry business laptops.",
@@ -270,12 +271,12 @@ PRODUCTS: list[dict[str, Any]] = [
             "noise_profile": ("Cooler and quieter than typical creator rigs", None),
         },
         "content": {
-            "best_for": "Premium creative work, presenting, and pen workflows",
+            "best_for": "Premium productivity, media, presenting, and pen workflows",
             "fit_summary": "This is the premium do-more machine when the shopper wants one device for strong daily productivity, better display quality, sketching or presenting flexibility, and future-facing AI features.",
             "key_highlights": ["32 GB RAM", "2.8K OLED touch", "Convertible with pen"],
             "salesperson_tips": [
                 "Use this when the shopper values display quality, pen input, presentation flexibility, or wants a single premium machine for mixed work.",
-                "It is the strongest non-gaming recommendation for premium multitasking and creative use without a bulky dGPU system.",
+                "It is a strong non-gaming recommendation for premium multitasking, media comfort, and light creative use without a bulky dGPU system.",
             ],
         },
         "accessories": ["Yoga Sleeve", "Yoga Pen bundle", "USB-C 65W GaN charger"],
@@ -334,7 +335,7 @@ PRODUCTS: list[dict[str, Any]] = [
             "noise_profile": ("Gaming-class acoustics with strong cooling", None),
         },
         "content": {
-            "best_for": "High-end gaming, heavy editing, and creator workloads",
+            "best_for": "Upper-mainstream gaming, GPU-accelerated editing, and creator workloads",
             "fit_summary": "Recommend this only when the answers justify it: gaming, 3D, serious video work, heavier codebases, or a shopper explicitly asking for long-term GPU headroom and a better display.",
             "key_highlights": ["RTX 4060", '16" WQXGA 165Hz', "1 TB SSD"],
             "salesperson_tips": [
@@ -346,6 +347,8 @@ PRODUCTS: list[dict[str, Any]] = [
         "finance": ["No-cost EMI up to 12 months", "Exchange bonus may apply in store"],
     },
 ]
+
+PRODUCTS.extend(psref_products(_svg_data_uri))
 
 
 BENEFIT_MAPPINGS = [
@@ -422,8 +425,7 @@ def _gallery(image: str) -> list[str]:
     return [image, image, image]
 
 
-@transaction.atomic
-def replace_lenovo_catalog(cmid: int = 1, packet_id: int = 1) -> dict[str, Any]:
+def _ensure_lenovo_packet(cmid: int, packet_id: int) -> Packet:
     packet, _ = Packet.objects.update_or_create(
         packet_id=packet_id,
         defaults={
@@ -433,6 +435,78 @@ def replace_lenovo_catalog(cmid: int = 1, packet_id: int = 1) -> dict[str, Any]:
             "launch_status": "active",
         },
     )
+    return packet
+
+
+def _ensure_features(packet: Packet) -> dict[str, Feature]:
+    feature_map: dict[str, Feature] = {}
+    for feature in FEATURES:
+        feature_map[feature.code], _ = Feature.objects.update_or_create(
+            packet=packet,
+            feature_code=feature.code,
+            defaults={
+                "feature_name": feature.name,
+                "feature_type": feature.type,
+                "is_comparable": feature.comparable,
+                "is_scoreable": feature.scoreable,
+            },
+        )
+    return feature_map
+
+
+def _upsert_catalog_product(packet: Packet, feature_map: dict[str, Feature], entry: dict[str, Any]) -> tuple[Product, bool]:
+    product, created = Product.objects.update_or_create(
+        product_code=entry["product_code"],
+        defaults={
+            "packet": packet,
+            "model": entry["model"],
+            "family": entry["family"],
+            "price": entry["price"],
+            "product_url": entry["url"],
+            "crawl_status": "seeded",
+        },
+    )
+
+    seen_feature_codes = set()
+    for feature_code, payload in entry["specs"].items():
+        seen_feature_codes.add(feature_code)
+        value, normalized = payload
+        FeatureValue.objects.update_or_create(
+            product=product,
+            feature=feature_map[feature_code],
+            defaults={
+                "value": value,
+                "normalized_value": normalized,
+            },
+        )
+    product.feature_values.exclude(feature__feature_code__in=seen_feature_codes).delete()
+
+    ProductContent.objects.update_or_create(
+        product=product,
+        defaults={
+            "hero_image_url": entry["image"],
+            "gallery_urls": _gallery(entry["image"]),
+            "fit_summary": entry["content"]["fit_summary"],
+            "key_highlights": entry["content"]["key_highlights"],
+            "best_for": entry["content"]["best_for"],
+            "salesperson_tips": entry["content"]["salesperson_tips"],
+        },
+    )
+
+    product.accessories.all().delete()
+    for accessory in entry["accessories"]:
+        Accessory.objects.create(product=product, accessory_name=accessory)
+
+    product.finance_schemes.all().delete()
+    for scheme in entry["finance"]:
+        FinanceScheme.objects.create(product=product, scheme_name=scheme)
+
+    return product, created
+
+
+@transaction.atomic
+def replace_lenovo_catalog(cmid: int = 1, packet_id: int = 1) -> dict[str, Any]:
+    packet = _ensure_lenovo_packet(cmid, packet_id)
 
     RecommendationResult.objects.all().delete()
 
@@ -522,4 +596,63 @@ def replace_lenovo_catalog(cmid: int = 1, packet_id: int = 1) -> dict[str, Any]:
         "products_created": len(created_products),
         "product_codes": [product.product_code for product in created_products],
         "features_created": len(feature_map),
+    }
+
+
+@transaction.atomic
+def upsert_lenovo_catalog(cmid: int = 1, packet_id: int = 1) -> dict[str, Any]:
+    """
+    Add/update the Lenovo master catalog without deleting existing products.
+
+    Use this for local/admin evaluation data so current product IDs and
+    unrelated manually entered products are preserved.
+    """
+    packet = _ensure_lenovo_packet(cmid, packet_id)
+    feature_map = _ensure_features(packet)
+
+    created_products: list[Product] = []
+    updated_products: list[Product] = []
+    for entry in PRODUCTS:
+        product, created = _upsert_catalog_product(packet, feature_map, entry)
+        if created:
+            created_products.append(product)
+        else:
+            updated_products.append(product)
+
+    packet.benefit_mappings.all().delete()
+    for benefit_name, feature_code, weight_impact in BENEFIT_MAPPINGS:
+        BenefitMapping.objects.create(
+            packet=packet,
+            benefit_name=benefit_name,
+            feature_code=feature_code,
+            weight_impact=weight_impact,
+        )
+
+    packet.dimensions.all().delete()
+    for dimension_name, priority, seed_questions in DIMENSIONS:
+        Dimension.objects.create(
+            packet=packet,
+            dimension_name=dimension_name,
+            priority=priority,
+            seed_questions=seed_questions,
+        )
+
+    ScoringConfig.objects.update_or_create(
+        packet=packet,
+        defaults={
+            "default_weights": DEFAULT_WEIGHTS,
+            "hard_filters": {},
+            "stopping_rules": {"min_questions": 5, "max_questions": 7},
+        },
+    )
+
+    CustomerSession.objects.filter(cmid=cmid, packet_id__isnull=True).update(packet_id=packet.packet_id)
+
+    return {
+        "packet_id": packet.packet_id,
+        "cmid": cmid,
+        "products_created": len(created_products),
+        "products_updated": len(updated_products),
+        "products_total_in_seed": len(PRODUCTS),
+        "product_codes_created": [product.product_code for product in created_products],
     }
