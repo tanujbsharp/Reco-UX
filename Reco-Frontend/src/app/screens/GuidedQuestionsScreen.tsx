@@ -41,7 +41,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { mockCommentary, mockQuestions, Question, QuestionOption } from "../data/mockData";
 import { Answer, useJourney } from "../context/JourneyContext";
-import { getFirstQuestion, submitAnswer as submitAnswerApi } from "../services/questionApi";
+import { submitAnswer as submitAnswerApi } from "../services/questionApi";
 import { transcribeAudio } from "../services/voiceApi";
 
 const iconMap = {
@@ -154,9 +154,76 @@ const fallbackGuidedQuestions: Question[] = [
   ...mockQuestions.slice(2, 5),
 ].map((question) => ensureOtherOption(question));
 
+// The first two questions are deterministic (they establish the primary user
+// and the use cases). The frontend owns them so they always appear first —
+// including when the shopper goes back to the summary and continues again —
+// while the LLM only generates questions 3+.
+const PRIMARY_USER_QUESTION_ID = "fallback-q1";
+const USE_CASE_QUESTION_ID = "fallback-q2";
+const baselineGuidedQuestions: Question[] = fallbackGuidedQuestions.slice(0, 2);
+
+// Map free-text/spoken discovery signals to the fixed primary-user options.
+// Order matters: more specific relationships are checked before "Myself".
+// Relationship matches require possessive/relational context ("my son",
+// "for my mother") — a first-person statement like "I'm a college student"
+// must NOT trigger "My child who is a student"; it means the speaker.
+const PRIMARY_USER_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
+  { label: "My parent", pattern: /\b(?:my|our|for)\s+(?:parents?|mother|mom|mum|father|dad|daddy)\b|\bgrand(?:ma|pa|mother|father|parents?)\b|\belderly\b/i },
+  { label: "My child who is a student", pattern: /\b(?:my|our)\s+(?:child|children|kid|kids|son|daughter)\b|\bfor\s+(?:a\s+|my\s+|our\s+)?(?:child|kid|son|daughter)\b/i },
+  { label: "My spouse or partner", pattern: /\b(?:my|our|for)\s+(?:wife|husband|spouse|partner|fiancee?)\b/i },
+  { label: "My team or employee", pattern: /\b(?:my|our)\s+(?:team|employees?|staff)\b|\b(?:colleagues?|coworkers?|company use)\b/i },
+  { label: "My sibling or another family member", pattern: /\b(?:my|our|for)\s+(?:brother|sister|sibling|cousin|relative)\b/i },
+  { label: "A shared family device", pattern: /\b(?:shared|whole family|entire family|family device|everyone at home)\b/i },
+  { label: "Myself", pattern: /\b(?:myself|my own|for me|for myself|personal use)\b|\b(?:i'?m|i am)\s+an?\b|\bi\s+(?:want|need|use|work|study|code|play|am|travel)\b/i },
+];
+
+// Map discovery signals to the fixed use-case options (multi-select).
+const USE_CASE_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
+  { label: "Study and assignments", pattern: /\b(study|studying|studies|assignment|homework|schoolwork|school work|exam|revision)\b/i },
+  { label: "College classes and project work", pattern: /\b(college|university|campus|coursework|lecture|class(es)?|project work|presentations?)\b/i },
+  { label: "Work and productivity", pattern: /\b(work|productivity|office|business|docs?|documents?|spreadsheets?|excel|word|email|multitask(ing)?)\b/i },
+  { label: "Coding and software development", pattern: /\b(cod(e|ing)|programming|develop(er|ment|ing)?|software|terminal|compiler|github|ide)\b/i },
+  // NOTE: deliberately no bare "graphics" here — "high graphics" in a gaming
+  // brief means GPU settings, not design work.
+  { label: "Content creation and design", pattern: /\b(design(ing)?|graphic design|photos?|photoshop|reels?|illustrat|figma|creative work|content creation)\b/i },
+  { label: "Video editing, 3D, or CAD", pattern: /\b(video edit(ing)?|3d|cad|render(ing)?|premiere|after effects|blender|modeling|animation)\b/i },
+  { label: "Gaming and esports", pattern: /\b(gam(e|es|ing)|esports?|valorant|fps|steam)\b/i },
+  { label: "Streaming and content consumption", pattern: /\b(stream(ing)?|netflix|youtube|movies?|ott|music|shows?|binge)\b/i },
+  { label: "Remote work and video calls", pattern: /\b(remote|video calls?|zoom|google meet|ms teams|meetings?|conferenc(e|ing)|work from home|wfh|hybrid)\b/i },
+  { label: "Business travel and presentations", pattern: /\b(travel(ling|ing)?|business trip|on the go|client meetings?|commut(e|ing))\b/i },
+  { label: "Everyday browsing and home use", pattern: /\b(browsing|browse|everyday|day-to-day|home use|basic|casual|general use|web surfing|internet)\b/i },
+];
+
+function detectPrimaryUser(signal: string): string | null {
+  const text = signal.toLowerCase();
+  if (!text.trim()) {
+    return null;
+  }
+  for (const entry of PRIMARY_USER_SIGNALS) {
+    if (entry.pattern.test(text)) {
+      return entry.label;
+    }
+  }
+  return null;
+}
+
+function detectUseCases(signal: string): string[] {
+  const text = signal.toLowerCase();
+  if (!text.trim()) {
+    return [];
+  }
+  const matches: string[] = [];
+  for (const entry of USE_CASE_SIGNALS) {
+    if (entry.pattern.test(text) && !matches.includes(entry.label)) {
+      matches.push(entry.label);
+    }
+  }
+  return matches;
+}
+
 export function GuidedQuestionsScreen() {
   const navigate = useNavigate();
-  const { voiceTags, answers, addAnswer, journeyEntryMode, sessionId } = useJourney();
+  const { voiceTags, discoveryText, answers, addAnswer, journeyEntryMode, sessionId } = useJourney();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [selectedValue, setSelectedValue] = useState<string | string[] | null>(null);
@@ -172,11 +239,13 @@ export function GuidedQuestionsScreen() {
   const additionalAudioChunksRef = useRef<Blob[]>([]);
   const directGuidedEntry = journeyEntryMode === "guided";
 
-  const [questions, setQuestions] = useState<Question[]>(sessionId ? [] : fallbackGuidedQuestions);
-  const [questionsLoading, setQuestionsLoading] = useState(Boolean(sessionId));
+  const [questions, setQuestions] = useState<Question[]>(
+    sessionId ? baselineGuidedQuestions : fallbackGuidedQuestions,
+  );
+  const [questionsLoading] = useState(false);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
-  const [usingLLMQuestions, setUsingLLMQuestions] = useState(Boolean(sessionId));
+  const [usingLLMQuestions] = useState(Boolean(sessionId));
   const [estimatedTotalQuestions, setEstimatedTotalQuestions] = useState(5);
 
   // Helper: map an LLM question response to our Question format
@@ -213,54 +282,6 @@ export function GuidedQuestionsScreen() {
   };
 
   useEffect(() => {
-    if (!sessionId) {
-      setQuestions(fallbackGuidedQuestions);
-      setQuestionsLoading(false);
-      setQuestionsError("Using offline questions.");
-      setUsingLLMQuestions(false);
-      setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
-      return;
-    }
-
-    let cancelled = false;
-    setQuestionsLoading(true);
-    setQuestionsError(null);
-
-    getFirstQuestion(sessionId)
-      .then((data) => {
-        if (cancelled) return;
-        if (data && !data.done && data.question) {
-          const firstQ = mapLLMQuestion(data, 0);
-          setQuestions([firstQ]);
-          setCurrentIndex(0);
-          setUsingLLMQuestions(true);
-          setEstimatedTotalQuestions(Number(data.total_estimated) || 5);
-        } else if (data?.done) {
-          // LLM already has enough info — skip straight to recommendations
-          navigate("/processing");
-        } else {
-          console.warn("LLM returned no question, falling back to offline questions");
-          setQuestions(fallbackGuidedQuestions);
-          setUsingLLMQuestions(false);
-          setQuestionsError("Using offline questions.");
-          setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("Failed to fetch first question from LLM, using offline questions:", err);
-        setQuestionsError("Using offline questions.");
-        setQuestions(fallbackGuidedQuestions);
-        setUsingLLMQuestions(false);
-        setEstimatedTotalQuestions(fallbackGuidedQuestions.length);
-      })
-      .finally(() => {
-        if (!cancelled) setQuestionsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [navigate, sessionId]);
-
-  useEffect(() => {
     if (!(questionsLoading || isSubmittingAnswer)) {
       document.body.style.cursor = "";
       return;
@@ -284,6 +305,29 @@ export function GuidedQuestionsScreen() {
     },
     [currentQuestion?.prefillFromTags, voiceTags]
   );
+
+  // Combined free-text signal from the spoken/typed discovery brief plus tags.
+  const discoverySignalText = useMemo(
+    () => [discoveryText, ...voiceTags.map((tag) => tag.text)].filter(Boolean).join(" "),
+    [discoveryText, voiceTags]
+  );
+
+  // For the two fixed baseline questions, suggest options straight from the
+  // discovery signal: highlight the primary user (if stated) and pre-select the
+  // relevant use cases. Empty for everything else.
+  const signalPrefillLabels = useMemo(() => {
+    if (!currentQuestion) {
+      return [] as string[];
+    }
+    if (currentQuestion.id === PRIMARY_USER_QUESTION_ID) {
+      const match = detectPrimaryUser(discoverySignalText);
+      return match ? [match] : [];
+    }
+    if (currentQuestion.id === USE_CASE_QUESTION_ID) {
+      return detectUseCases(discoverySignalText);
+    }
+    return [];
+  }, [currentQuestion, discoverySignalText]);
 
   useEffect(() => {
     return () => {
@@ -329,6 +373,25 @@ export function GuidedQuestionsScreen() {
       }
     }
 
+    // Prefill the fixed baseline questions directly from the discovery signal.
+    if (signalPrefillLabels.length > 0) {
+      if (currentQuestion.type === "single-choice") {
+        const match = signalPrefillLabels.find((label) => optionLabels.includes(label));
+        if (match) {
+          setSelectedValue(match);
+          setOtherText("");
+          return;
+        }
+      } else {
+        const matches = signalPrefillLabels.filter((label) => optionLabels.includes(label));
+        if (matches.length) {
+          setSelectedValue(matches);
+          setOtherText("");
+          return;
+        }
+      }
+    }
+
     if (matchingVoiceTags.length > 0) {
       if (currentQuestion.type === "single-choice") {
         const matchedOption = currentQuestion.options.find((option) =>
@@ -357,7 +420,7 @@ export function GuidedQuestionsScreen() {
 
     setSelectedValue(currentQuestion.type === "multi-choice" ? [] : null);
     setOtherText("");
-  }, [currentIndex, currentQuestion, existingAnswer, matchingVoiceTags]);
+  }, [currentIndex, currentQuestion, existingAnswer, matchingVoiceTags, signalPrefillLabels]);
 
   const existingAdditionalSpecsAnswer = answers.find((answer) => answer.questionId === additionalSpecsQuestionId);
 
@@ -611,6 +674,19 @@ export function GuidedQuestionsScreen() {
         return;
       }
 
+      if (nextData?.total_estimated) {
+        setEstimatedTotalQuestions(Number(nextData.total_estimated) || 5);
+      }
+
+      // The first baseline question (primary user) always advances locally to
+      // the second baseline question (use cases) — both are frontend-owned, so
+      // returning to the summary and continuing re-shows them instead of
+      // jumping ahead to a previously generated dynamic question.
+      if (currentIndex === 0 && questions.length > 1) {
+        goToQuestion(1, "left");
+        return;
+      }
+
       if (usingLLMQuestions) {
         if (nextData?.done) {
           moveToAdditionalSpecs();
@@ -623,7 +699,6 @@ export function GuidedQuestionsScreen() {
             ...prev.slice(0, nextIndex),
             mapLLMQuestion(nextData, nextIndex),
           ]);
-          setEstimatedTotalQuestions(Number(nextData.total_estimated) || 5);
           goToQuestion(nextIndex, "left");
         }
         return;
@@ -685,10 +760,13 @@ export function GuidedQuestionsScreen() {
     const currentValues = Array.isArray(selectedValue) ? selectedValue : [];
     const isSelected =
       currentQuestion.type === "single-choice" ? selectedValue === option.label : currentValues.includes(option.label);
+    // Badge any selected option that traces back to the discovery input —
+    // including when revisiting an already-answered question (the badge used
+    // to vanish once an answer was saved).
     const isVoicePrefill =
-      !existingAnswer &&
-      matchingVoiceTags.some((tag) => optionMatchesTag(option, tag.text)) &&
-      isSelected;
+      isSelected &&
+      (matchingVoiceTags.some((tag) => optionMatchesTag(option, tag.text)) ||
+        signalPrefillLabels.includes(option.label));
 
     return (
       <div key={option.label} className="space-y-3">

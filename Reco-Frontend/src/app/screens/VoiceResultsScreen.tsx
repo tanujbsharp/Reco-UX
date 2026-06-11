@@ -42,11 +42,16 @@ function splitManualTagInput(text: string) {
     .filter((part) => part.length > 0);
 }
 
-function formatArchetypeLabel(value: string) {
+function toTitleCase(value: string) {
   return value
-    .split("-")
+    .split(/[\s-]+/)
+    .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function formatArchetypeLabel(value: string) {
+  return toTitleCase(value);
 }
 
 export function VoiceResultsScreen() {
@@ -338,7 +343,7 @@ export function VoiceResultsScreen() {
                             className="mt-2 h-11 rounded-2xl border-slate-200 bg-slate-50"
                           />
                         ) : (
-                          <div className="mt-2 text-lg font-medium text-slate-900">{tag.text}</div>
+                          <div className="mt-2 text-lg font-medium text-slate-900">{toTitleCase(tag.text)}</div>
                         )}
                       </div>
 

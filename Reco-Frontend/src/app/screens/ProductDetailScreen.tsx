@@ -15,6 +15,7 @@ import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { ExpandableCommentaryCard } from "../components/ExpandableCommentaryCard";
 import { GlowCard } from "../components/GlowCard";
 import { ProductChatWidget } from "../components/ProductChatWidget";
+import { ImageLightbox } from "../components/ImageLightbox";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -256,6 +257,7 @@ export function ProductDetailScreen() {
     availableProducts,
   } = useJourney();
   const [activeImage, setActiveImage] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [apiProduct, setApiProduct] = useState<Product | null>(null);
   const [productLoading, setProductLoading] = useState(false);
 
@@ -495,16 +497,21 @@ export function ProductDetailScreen() {
 
             <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr] items-stretch">
               <div className="flex flex-col gap-4 h-full">
-                <div className="flex-1 overflow-hidden rounded-[30px] border border-slate-200 bg-[#f8fbff] flex items-center justify-center min-h-[340px] p-6">
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(activeImage)}
+                  aria-label="View image full screen"
+                  className="group flex-1 overflow-hidden rounded-[30px] border border-slate-200 bg-[#f8fbff] flex items-center justify-center min-h-[340px] p-6 cursor-zoom-in transition hover:border-[#3b82f6]/40 hover:shadow-md"
+                >
                   <img
                     src={heroImage}
                     alt={product.model}
-                    className="h-full w-full object-contain"
+                    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
                     onError={(event) => {
                       event.currentTarget.src = visualFallbackImage;
                     }}
                   />
-                </div>
+                </button>
 
                 <div className="grid grid-cols-3 gap-3 h-24 flex-shrink-0">
                   {gallery.map((image, index) => (
@@ -698,15 +705,22 @@ export function ProductDetailScreen() {
                   </div>
                   <div className="grid gap-4 md:grid-cols-3">
                     {gallery.map((image, index) => (
-                      <img
+                      <button
                         key={`${image}-${index}`}
-                        src={image}
-                        alt={`${product.model} gallery ${index + 1}`}
-                        className="h-48 w-full rounded-[22px] object-cover"
-                        onError={(event) => {
-                          event.currentTarget.src = visualFallbackImage;
-                        }}
-                      />
+                        type="button"
+                        onClick={() => setLightboxIndex(index)}
+                        aria-label={`View image ${index + 1} full screen`}
+                        className="group overflow-hidden rounded-[22px] border border-slate-200 cursor-zoom-in transition hover:border-[#3b82f6]/40 hover:shadow-md"
+                      >
+                        <img
+                          src={image}
+                          alt={`${product.model} gallery ${index + 1}`}
+                          className="h-48 w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                          onError={(event) => {
+                            event.currentTarget.src = visualFallbackImage;
+                          }}
+                        />
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -805,6 +819,13 @@ export function ProductDetailScreen() {
         </GlowCard>
       </div>
       <ProductChatWidget contextProducts={[product]} />
+      <ImageLightbox
+        images={gallery}
+        openIndex={lightboxIndex}
+        altPrefix={product.model}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={(index) => setLightboxIndex(index)}
+      />
     </TwoZoneLayout>
   );
 }

@@ -24,12 +24,14 @@ when they are not yet available (Phase 12), stub product data is used.
 import hashlib
 import json
 import logging
+import re
 import time
 
 from django.db.models import F
 
 from apps.common.bedrock_client import BedrockClient
 from apps.comparisons.models import ComparisonCache
+from apps.comparisons import benchmarks
 from apps.questions.models import LLMCallLog
 
 logger = logging.getLogger(__name__)
@@ -135,13 +137,15 @@ def compare_products(product_id_1, product_id_2, cmid, session=None):
         ComparisonCache.objects.filter(pk=cache_entry.pk).update(
             hit_count=F('hit_count') + 1,
         )
-        return _build_response(
+        response = _build_response(
             product_1, product_2,
             feature_comparison=cache_entry.commentary,
             implications=cache_entry.implications,
             winner_by_feature=cache_entry.winner_by_feature,
             cache_hit=True,
         )
+        response['spec_verdicts'] = _build_spec_verdicts(product_1, product_2)
+        return response
 
     # 6. Cache MISS -- call Bedrock
     comparison_data = _call_bedrock_comparison(product_1, product_2, session)
@@ -165,13 +169,15 @@ def compare_products(product_id_1, product_id_2, cmid, session=None):
         logger.warning('Failed to save comparison cache: %s', e)
 
     # 8. Return
-    return _build_response(
+    response = _build_response(
         product_1, product_2,
         feature_comparison=feature_comparison,
         implications=implications,
         winner_by_feature=winner_by_feature,
         cache_hit=False,
     )
+    response['spec_verdicts'] = _build_spec_verdicts(product_1, product_2)
+    return response
 
 
 # ===================================================================
@@ -586,3 +592,172 @@ def _build_response(product_1, product_2, feature_comparison,
         'winner_by_feature': winner_by_feature,
         'cache_hit': cache_hit,
     }
+
+
+# ===================================================================
+# Objective spec verdicts
+#
+# For each spec, declare which product is objectively stronger — using real
+# benchmark scores for chip/GPU, a quality score for the display, and
+# unit-aware numeric parsing for the rest. This is a plain fact about the
+# hardware; it is intentionally NOT tied to the customer's needs or to the
+# recommendation ranking.
+# ===================================================================
+
+# Relative difference below which two values are treated as a tie (e.g. an
+# RTX 3090 ~ RTX 4070 land within this band and correctly show as "tie").
+_TIE_RATIO = 0.05
+
+_SPEC_DEFS = [
+    {'key': 'chip', 'label': 'Chip', 'metric': 'cpu', 'direction': 'higher'},
+    {'key': 'graphics', 'label': 'Graphics', 'metric': 'gpu', 'direction': 'higher'},
+    {'key': 'memory', 'label': 'Memory', 'metric': 'memory', 'direction': 'higher'},
+    {'key': 'storage', 'label': 'Storage', 'metric': 'storage', 'direction': 'higher'},
+    {'key': 'display', 'label': 'Display', 'metric': 'display', 'direction': 'higher'},
+    {'key': 'battery', 'label': 'Battery', 'metric': 'battery', 'direction': 'higher'},
+    {'key': 'weight', 'label': 'Weight', 'metric': 'weight', 'direction': 'lower'},
+]
+
+
+def _build_spec_verdicts(product_1, product_2):
+    specs_1 = _specs_by_code(product_1)
+    specs_2 = _specs_by_code(product_2)
+
+    verdicts = []
+    for spec in _SPEC_DEFS:
+        metric_1 = _product_metric(spec['metric'], specs_1)
+        metric_2 = _product_metric(spec['metric'], specs_2)
+        winner = _objective_winner(spec, metric_1, metric_2)
+        verdicts.append({
+            'key': spec['key'],
+            'label': spec['label'],
+            'objective_winner': winner,
+            'verdict': 'stronger' if winner in ('product_1', 'product_2') else 'neutral',
+        })
+    return verdicts
+
+
+def _specs_by_code(product):
+    out = {}
+    for spec in product.get('specs', []) or []:
+        code = str(spec.get('feature_code', '')).strip().lower()
+        if code:
+            out[code] = spec.get('value')
+    return out
+
+
+def _first_spec(specs, codes):
+    for code in codes:
+        value = specs.get(code)
+        if value not in (None, ''):
+            return value
+    return None
+
+
+def _first_number(text):
+    match = re.search(r'(\d+(?:\.\d+)?)', str(text or ''))
+    return float(match.group(1)) if match else None
+
+
+def _parse_gb(text):
+    """Storage/memory in GB, normalizing TB -> GB so 1 TB beats 512 GB."""
+    if not text:
+        return None
+    lowered = str(text).lower()
+    number = _first_number(lowered)
+    if number is None:
+        return None
+    return number * 1024 if 'tb' in lowered else number
+
+
+def _battery_metric(text):
+    """(value, unit). Compares only against the same unit (Wh vs Wh)."""
+    lowered = str(text or '').lower()
+    match = re.search(r'(\d+(?:\.\d+)?)\s*wh', lowered)
+    if match:
+        return (float(match.group(1)), 'wh')
+    match = re.search(r'(\d+(?:\.\d+)?)\s*(?:hours|hour|hrs|hr)\b', lowered)
+    if match:
+        return (float(match.group(1)), 'h')
+    number = _first_number(lowered)
+    return (number, 'wh') if number is not None else (None, '')
+
+
+def _display_metric(text):
+    """Objective display quality score (resolution + panel + refresh + touch),
+    so a 14" 2.8K OLED 120Hz correctly beats a 16" WUXGA IPS rather than the
+    bigger panel always winning."""
+    lowered = str(text or '').lower()
+    if not lowered.strip():
+        return (None, 'display')
+
+    # Resolution tier
+    if any(token in lowered for token in ['4k', 'wquxga', '3840']):
+        score = 5.0
+    elif '3.2k' in lowered:
+        score = 4.6
+    elif any(token in lowered for token in ['2.8k', '2880']):
+        score = 4.3
+    elif any(token in lowered for token in ['2.5k', 'wqhd', 'wqxga', '2560']):
+        score = 3.8
+    elif '2k' in lowered:
+        score = 3.5
+    elif any(token in lowered for token in ['wuxga', 'fhd', '1920', '1200', '1080']):
+        score = 3.0
+    elif any(token in lowered for token in ['1366', ' hd']):
+        score = 2.0
+    else:
+        score = 3.0  # default to FHD-class when unspecified
+
+    # Panel quality
+    if 'oled' in lowered:
+        score += 0.8
+    elif 'mini led' in lowered or 'miniled' in lowered:
+        score += 0.7
+    elif 'ips' in lowered:
+        score += 0.2
+
+    # Refresh rate
+    if '240hz' in lowered:
+        score += 0.6
+    elif any(token in lowered for token in ['165hz', '144hz', '120hz', '90hz']):
+        score += 0.3
+
+    if 'touch' in lowered:
+        score += 0.1
+
+    return (score, 'display')
+
+
+def _product_metric(metric, specs):
+    """Return (value, unit) for a spec; unit guards against comparing across
+    incompatible units. value is None when unrecognized / not comparable."""
+    if metric == 'cpu':
+        return (benchmarks.cpu_score(_first_spec(specs, ['processor', 'chip', 'cpu'])), 'score')
+    if metric == 'gpu':
+        return (benchmarks.gpu_score(_first_spec(specs, ['graphics', 'gpu'])), 'score')
+    if metric == 'memory':
+        return (_parse_gb(_first_spec(specs, ['ram', 'memory'])), 'gb')
+    if metric == 'storage':
+        return (_parse_gb(_first_spec(specs, ['storage'])), 'gb')
+    if metric == 'display':
+        return _display_metric(_first_spec(specs, ['display_size', 'display', 'screen_size']))
+    if metric == 'battery':
+        return _battery_metric(_first_spec(specs, ['battery', 'battery_life']))
+    if metric == 'weight':
+        return (_first_number(_first_spec(specs, ['weight'])), 'kg')
+    return (None, '')
+
+
+def _objective_winner(spec, metric_1, metric_2):
+    value_1, unit_1 = metric_1
+    value_2, unit_2 = metric_2
+    if value_1 is None or value_2 is None or unit_1 != unit_2:
+        return None
+    high = max(value_1, value_2)
+    low = min(value_1, value_2)
+    if high <= 0 or (high - low) / high < _TIE_RATIO:
+        return 'tie'
+    if spec['direction'] == 'lower':
+        return 'product_1' if value_1 < value_2 else 'product_2'
+    return 'product_1' if value_1 > value_2 else 'product_2'

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Check, ChevronDown, ChevronUp, Mail, MessageCircleMore, Share2 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -10,13 +10,16 @@ import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
 import { sanitizeCustomerFacingText } from "../utils/customerCopy";
+import { useEnsureProducts } from "../hooks/useEnsureProducts";
 
 export function ShareSaveScreen() {
   const navigate = useNavigate();
-  const { selectedProducts, selectedProductId, customerInfo, availableProducts } = useJourney();
+  const { sessionId, selectedProducts, selectedProductId, customerInfo, availableProducts } = useJourney();
   const [shareTarget, setShareTarget] = useState<"whatsapp" | "email" | null>(null);
   const [showEmailPreview, setShowEmailPreview] = useState(true);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Recover products if a refresh wiped them (re-fetches via the persisted session).
+  const rehydrating = useEnsureProducts();
 
   const activeProducts = useMemo(() => {
     const productCatalog = availableProducts;
@@ -31,9 +34,27 @@ export function ShareSaveScreen() {
     return productCatalog.length > 0 ? [productCatalog[0]] : [];
   }, [availableProducts, selectedProductId, selectedProducts]);
 
+  // Nothing to recover (no products, not loading, no session) -> back to start.
+  useEffect(() => {
+    if (activeProducts.length === 0 && !rehydrating && !sessionId) {
+      navigate("/", { replace: true });
+    }
+  }, [activeProducts.length, rehydrating, sessionId, navigate]);
+
   const fallbackProduct = activeProducts[0];
   if (!fallbackProduct) {
-    return null;
+    // Never blank: show a recovery loader while re-fetching (or just before the
+    // redirect fires) instead of returning null.
+    return (
+      <TwoZoneLayout showCommentary={false} showTopBar={false} showStartOver={false} transparentMain={true} contentClassName="p-0">
+        <div className="flex min-h-full w-full flex-col items-center justify-center gap-4 p-8 text-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-[#2563eb]" />
+          <p className="text-base font-medium text-slate-600">
+            {rehydrating || sessionId ? "Loading your shortlist…" : "Taking you back to start…"}
+          </p>
+        </div>
+      </TwoZoneLayout>
+    );
   }
 
   const emailSubject = activeProducts.length > 1 

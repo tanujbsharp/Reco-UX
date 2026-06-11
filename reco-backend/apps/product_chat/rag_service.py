@@ -25,6 +25,12 @@ SYSTEM_PROMPT = (
     "Answer using ONLY the provided structured product context and optional product knowledge chunks. "
     "On a single-product question, answer about that specific product. "
     "On a comparison question, compare only the provided products. "
+    "When judging which processor or graphics is faster or better, use the "
+    "'CPU performance index' and 'GPU performance index' spec values (higher is "
+    "faster) rather than guessing from model names. These indexes are internal: "
+    "NEVER mention the index numbers, the word 'index', or any benchmark scores "
+    "in your reply. Express the verdict in plain language instead (e.g. "
+    "'noticeably faster', 'roughly 10% faster', 'equally capable'). "
     "If the answer is not supported by the provided context, say so clearly. "
     "Be concise, specific, and practical."
 )
@@ -65,6 +71,30 @@ def load_catalog_product_context(product_ids, cmid):
                 'code': feature_value.feature.feature_code,
                 'value': str(feature_value.value or '').strip(),
             })
+
+        # Append objective benchmark indexes so the LLM can answer "which chip
+        # is better" deterministically (consistent with the compare engine)
+        # instead of guessing from model names.
+        try:
+            from apps.comparisons import benchmarks
+            for product_id, specs in features_by_product.items():
+                by_code = {spec['code']: spec['value'] for spec in specs}
+                cpu = benchmarks.cpu_score(by_code.get('processor', ''))
+                gpu = benchmarks.gpu_score(by_code.get('graphics', ''))
+                if cpu:
+                    specs.append({
+                        'label': 'CPU performance index',
+                        'code': 'cpu_benchmark',
+                        'value': f'{int(cpu)} (higher is faster)',
+                    })
+                if gpu:
+                    specs.append({
+                        'label': 'GPU performance index',
+                        'code': 'gpu_benchmark',
+                        'value': f'{int(gpu)} (higher is faster)',
+                    })
+        except Exception as exc:
+            logger.debug('Benchmark enrichment skipped: %s', exc)
 
         for content in ProductContent.objects.filter(product_id__in=product_map.keys()):
             content_by_product[content.product_id] = content
@@ -156,7 +186,10 @@ def build_prompt(question, product_context, chunks):
             highlights = product.get('key_highlights', [])[:5]
             if highlights:
                 context_parts.append("Key highlights: " + ", ".join(str(item) for item in highlights))
-            specs = product.get('specs', [])[:12]
+            # 16: 11 catalog features + keyboard_quality + CPU/GPU benchmark
+            # indexes, with headroom. A lower cap silently drops the entries
+            # appended last (the benchmark indexes).
+            specs = product.get('specs', [])[:16]
             if specs:
                 context_parts.append("Specs:")
                 for spec in specs:

@@ -301,6 +301,7 @@ export function LeadCaptureScreen() {
                   <Label htmlFor="handoff-name" className="gap-2">
                     <UserRound className="h-4 w-4" />
                     Your name
+                    <span aria-hidden="true" className="-ml-1 font-semibold text-rose-600">*</span>
                   </Label>
                   <Input
                     id="handoff-name"
@@ -321,6 +322,7 @@ export function LeadCaptureScreen() {
                   <Label htmlFor="handoff-phone" className="gap-2">
                     <Phone className="h-4 w-4" />
                     Mobile number
+                    <span aria-hidden="true" className="-ml-1 font-semibold text-rose-600">*</span>
                   </Label>
                   <Input
                     id="handoff-phone"

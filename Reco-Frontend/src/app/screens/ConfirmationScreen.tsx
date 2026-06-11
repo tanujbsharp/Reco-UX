@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
+import { useEnsureProducts } from "../hooks/useEnsureProducts";
 
 export function ConfirmationScreen() {
   const navigate = useNavigate();
@@ -19,6 +20,9 @@ export function ConfirmationScreen() {
     resetJourney,
   } = useJourney();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // After a refresh wipes in-memory state, re-fetch products via the persisted
+  // session so the recommendation image returns instead of vanishing.
+  useEnsureProducts();
 
   const activeProducts = useMemo(() => {
     const productCatalog = availableProducts;
@@ -33,9 +37,9 @@ export function ConfirmationScreen() {
     return productCatalog.length > 0 ? [productCatalog[0]] : [];
   }, [availableProducts, selectedProductId, selectedProducts]);
 
-  if (activeProducts.length === 0) {
-    return null;
-  }
+  // No early null-return: a page refresh wipes the in-memory journey state,
+  // and returning null left the user staring at a blank screen. Render the
+  // completion message regardless; just omit the product cards when unknown.
 
   return (
     <TwoZoneLayout
@@ -43,10 +47,16 @@ export function ConfirmationScreen() {
       showTopBar={false}
       showStartOver={false}
       transparentMain={true}
-      contentClassName="p-0 flex flex-col"
+      contentClassName="p-0"
     >
-      <GlowCard glowColor="green" customSize className="flex h-full w-full flex-col justify-center rounded-[36px]">
-        <div className="space-y-8 p-8 text-center md:p-12">
+      {/* The scroll area must stay BLOCK layout (no flex) and the card
+          min-h-full: as a flex item, an explicit min-height replaces the
+          no-shrink default and pins the card to exactly viewport height, so
+          justify-center pushes overflow above the top edge where scrolling
+          can never reach it (the cropped check icon). In block layout the
+          card grows with content and the scroll area handles the rest. */}
+      <GlowCard glowColor="green" customSize className="flex min-h-full w-full shrink-0 flex-col justify-center rounded-[36px]">
+        <div className="space-y-8 p-8 pb-12 text-center md:p-12 md:pb-16">
             <motion.div
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -69,6 +79,7 @@ export function ConfirmationScreen() {
               </div>
             </motion.div>
 
+            {activeProducts.length > 0 && (
             <div className={`mx-auto grid gap-6 ${activeProducts.length > 1 ? "max-w-4xl grid-cols-1 md:grid-cols-2" : "max-w-md grid-cols-1"}`}>
               {activeProducts.map((p, idx) => (
                 <motion.div 
@@ -98,6 +109,7 @@ export function ConfirmationScreen() {
                 </motion.div>
               ))}
             </div>
+            )}
 
             <div className="rounded-[28px] border border-slate-200 bg-white/85 p-5 text-sm leading-6 text-slate-600">
               <div className="font-semibold text-slate-900">What was captured in this session</div>

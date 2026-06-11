@@ -40,7 +40,7 @@ function displayedStarLabel(score: number) {
   return score >= 92 ? "4.5 stars" : "4 stars";
 }
 
-function mapRecommendationRecord(record: Record<string, unknown>): Product {
+export function mapRecommendationRecord(record: Record<string, unknown>): Product {
   const family = ((record.family as string) ?? (record.product_family as string) ?? "Lenovo") as Product["family"];
   const model = (record.model as string) ?? (record.product_name as string) ?? (record.name as string) ?? "";
   const rawImage = (record.image as string) ?? (record.hero_image_url as string) ?? "";

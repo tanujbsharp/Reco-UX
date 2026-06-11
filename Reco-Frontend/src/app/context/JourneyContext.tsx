@@ -1,5 +1,55 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import type { Product } from "../data/mockData";
+
+// Journey state lives in memory, which means a browser refresh used to wipe
+// everything except the session id — leaving the confirmation/share screens
+// with no product to render (missing image, blank screen). Persisting the
+// relevant fields to sessionStorage keeps the journey intact across reloads
+// while still clearing automatically when the tab closes.
+const STORAGE_PREFIX = "reco_journey_";
+const PERSISTED_KEYS = [
+  "voiceTags",
+  "detectedArchetype",
+  "discoveryText",
+  "detectedLanguage",
+  "discoveryMode",
+  "journeyEntryMode",
+  "answers",
+  "selectedProducts",
+  "selectedProductId",
+  "customerInfo",
+  "storeNote",
+  "recommendationFeedbackStars",
+  "availableProducts",
+] as const;
+
+function loadPersisted<T>(key: string, fallback: T): T {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_PREFIX + key);
+    if (raw == null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function usePersistentState<T>(key: string, initial: T) {
+  const [state, setState] = useState<T>(() => loadPersisted(key, initial));
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(state));
+    } catch {
+      // sessionStorage may be unavailable (private mode / quota); ignore.
+    }
+  }, [key, state]);
+  return [state, setState] as const;
+}
+
+function clearPersistedJourney() {
+  for (const key of PERSISTED_KEYS) {
+    sessionStorage.removeItem(STORAGE_PREFIX + key);
+  }
+}
 
 export interface VoiceTag {
   id: string;
@@ -73,23 +123,23 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
       sessionStorage.removeItem("reco_session_id");
     }
   };
-  const [voiceTags, setVoiceTags] = useState<VoiceTag[]>([]);
-  const [detectedArchetype, setDetectedArchetype] = useState("");
-  const [discoveryText, setDiscoveryText] = useState("");
-  const [detectedLanguage, setDetectedLanguage] = useState("");
-  const [discoveryMode, setDiscoveryMode] = useState<"voice" | "text">("voice");
-  const [journeyEntryMode, setJourneyEntryMode] = useState<"discovery" | "guided">("discovery");
-  const [answers, setAnswers] = useState<Answer[]>([]);
-  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
+  const [voiceTags, setVoiceTags] = usePersistentState<VoiceTag[]>("voiceTags", []);
+  const [detectedArchetype, setDetectedArchetype] = usePersistentState("detectedArchetype", "");
+  const [discoveryText, setDiscoveryText] = usePersistentState("discoveryText", "");
+  const [detectedLanguage, setDetectedLanguage] = usePersistentState("detectedLanguage", "");
+  const [discoveryMode, setDiscoveryMode] = usePersistentState<"voice" | "text">("discoveryMode", "voice");
+  const [journeyEntryMode, setJourneyEntryMode] = usePersistentState<"discovery" | "guided">("journeyEntryMode", "discovery");
+  const [answers, setAnswers] = usePersistentState<Answer[]>("answers", []);
+  const [selectedProducts, setSelectedProducts] = usePersistentState<string[]>("selectedProducts", []);
+  const [selectedProductId, setSelectedProductId] = usePersistentState<string | null>("selectedProductId", null);
+  const [customerInfo, setCustomerInfo] = usePersistentState<CustomerInfo>("customerInfo", {
     name: "",
     phone: "",
     email: "",
   });
-  const [storeNote, setStoreNote] = useState("");
-  const [recommendationFeedbackStars, setRecommendationFeedbackStars] = useState<number | null>(null);
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [storeNote, setStoreNote] = usePersistentState("storeNote", "");
+  const [recommendationFeedbackStars, setRecommendationFeedbackStars] = usePersistentState<number | null>("recommendationFeedbackStars", null);
+  const [availableProducts, setAvailableProducts] = usePersistentState<Product[]>("availableProducts", []);
 
   const addAnswer = (answer: Answer) => {
     setAnswers((prev) => {
@@ -157,6 +207,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
     setDiscoveryMode("voice");
     setJourneyEntryMode("discovery");
     setCustomerInfo({ name: "", phone: "", email: "" });
+    clearPersistedJourney();
   };
 
   return (

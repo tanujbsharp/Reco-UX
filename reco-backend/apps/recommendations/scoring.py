@@ -22,6 +22,7 @@ Handles missing dependencies gracefully — packets/products models
 may not exist yet (Phase 12).
 """
 import logging
+import re
 from collections import defaultdict
 
 from apps.sessions_app.models import CustomerSession, SessionAnswer
@@ -43,6 +44,115 @@ from apps.recommendations.preference_inference import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Intent detection (used to nudge weights toward "right for today / value" vs
+# "room to grow / headroom").
+#
+# This replaces brittle exact-phrase matching (e.g. looking for the literal
+# string "room to grow over time"). Question options 3-5 are written fresh by
+# the LLM each session, so any exact wording match silently stopped firing the
+# moment the model rephrased an option. Detection is now meaning-based: it reads
+# the structured preference profile first, and falls back to a broad synonym set
+# rather than a single literal phrase.
+# ---------------------------------------------------------------------------
+VALUE_TODAY_PATTERNS = [
+    r"best fit for today",
+    r"\bfor (now|today)\b",
+    r"\b(current|present) needs?\b",
+    r"\bjust (regular|basic|simple|normal|everyday)\b",
+    r"\b(regular|basic|simple) (student|office|home|daily) use\b",
+    r"\bstudent or office\b",
+    r"\bdon'?t need (much|a lot|that much|high|extra) (power|performance|specs?)\b",
+    r"\bkeep it (simple|affordable|cheap|basic|light)\b",
+    r"\bvalue for money\b",
+    r"\bnothing fancy\b",
+]
+FUTURE_HEADROOM_PATTERNS = [
+    r"\broom to grow\b",
+    r"\bfuture[- ]?proof",
+    r"\bgrow over time\b",
+    r"\bhead ?room\b",
+    r"\blong[- ]?term\b",
+    r"\b(last|lasts) (me )?(a few|several|many|\d+)\b",
+    r"\bso it lasts\b",
+    r"\bwon'?t outgrow\b",
+    r"\bmore power (later|down the line|in (the )?future)\b",
+]
+
+
+def _text_matches_any(text, patterns):
+    """True if any regex pattern is found in the (lowercased) text."""
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _parse_display_inches(text):
+    """Extract the screen diagonal (e.g. 14, 15.6) from a raw display string
+    like '15.6\" FHD IPS, 144Hz'. Returns None when not stated."""
+    match = re.search(r'(\d{2}(?:\.\d{1,2})?)\s*(?:"|”|-inch|inch)', str(text or ''))
+    if not match:
+        return None
+    inches = float(match.group(1))
+    return inches if 9 <= inches <= 19 else None
+
+
+def _product_form_factor(model_name):
+    """Classify form factor from the model name. Clamshell is the default;
+    only clearly-named exotics are classified away from it."""
+    name = str(model_name or '').lower()
+    if 'yoga book' in name or 'dual ' in name:
+        return 'dual_screen'
+    if 'duet' in name:
+        return 'detachable'
+    if '2-in-1' in name or '2 in 1' in name or 'flex' in name:
+        return 'convertible'
+    return 'clamshell'
+
+
+# Size-preference detection: which band did the shopper explicitly ask for?
+SIZE_NEUTRAL_PATTERNS = [
+    r"doesn'?t matter", r"isn'?t a huge deal", r"no preference", r"\bflexible\b",
+    r"\bany size\b", r"average or above is fine",
+]
+SIZE_COMPACT_PATTERNS = [r"\b13\b", r"\b14\b", r"13-14", r"\bcompact\b", r"small screen"]
+SIZE_LARGE_PATTERNS = [r"\b15\b", r"\b16\b", r"15-16", r"big screen", r"\blarger\b", r"large screen"]
+SIZE_XL_PATTERNS = [r"\b17\b"]
+
+
+# ---------------------------------------------------------------------------
+# Benefit-mapping synonyms.
+#
+# BenefitMapping rows (Django admin) translate a stated benefit into feature
+# weight boosts, but they used to match by literal substring of the answer text
+# — so "work", "study", "streaming" etc. only fired if that exact word appeared.
+# This maps each benefit_name to a set of synonym patterns so a mapping fires on
+# meaning, not exact spelling. Unknown benefit_names fall back to a literal match
+# (so admin-entered benefits still work).
+# ---------------------------------------------------------------------------
+BENEFIT_SYNONYMS = {
+    "work": [r"\bwork\b", r"\bproductivity\b", r"\boffice\b", r"\bbusiness\b", r"\bdocs?\b", r"\bdocuments?\b", r"\bspreadsheets?\b", r"\bexcel\b", r"\bword\b", r"\bemail\b", r"\bmultitask"],
+    "excel": [r"\bexcel\b", r"\bspreadsheets?\b"],
+    "student": [r"\bstudent\b", r"\bstudy\b", r"\bstudying\b", r"\bschool\b", r"\bschoolwork\b", r"\bhomework\b", r"\bassignments?\b", r"\bexam\b"],
+    "study": [r"\bstudy\b", r"\bstudying\b", r"\bstudent\b", r"\bschool\b", r"\bhomework\b", r"\bassignments?\b", r"\bexam\b", r"\brevision\b"],
+    "college": [r"\bcollege\b", r"\buniversity\b", r"\bcampus\b", r"\bcoursework\b", r"\blectures?\b", r"\bsemester\b"],
+    "coding": [r"\bcod(e|ing)\b", r"\bprogramming\b", r"\bdevelop(er|ment|ing)?\b", r"\bsoftware\b", r"\bterminal\b", r"\bide\b", r"\bgithub\b"],
+    "design": [r"\bdesign(ing)?\b", r"\bgraphics?\b", r"\bphoto(shop)?\b", r"\billustrat", r"\bfigma\b", r"\bcreative\b", r"\bcontent creation\b"],
+    "editing": [r"\bvideo edit(ing)?\b", r"\bediting\b", r"\bpremiere\b", r"\bafter effects\b", r"\brender(ing)?\b", r"\b3d\b", r"\bcad\b", r"\banimation\b"],
+    "gaming": [r"\bgam(e|es|ing)\b", r"\besports?\b", r"\bvalorant\b", r"\bfps\b", r"\bsteam\b"],
+    "streaming": [r"\bstream(ing)?\b", r"\bnetflix\b", r"\byoutube\b", r"\bmovies?\b", r"\bott\b", r"\bbinge\b", r"\bmedia\b", r"\bmusic\b", r"\bshows?\b"],
+    "remote_work": [r"\bremote\b", r"\bvideo calls?\b", r"\bzoom\b", r"\bmeetings?\b", r"\bms teams\b", r"\bconferenc(e|ing)\b", r"\bwebcam\b", r"\bwork from home\b", r"\bwfh\b", r"\bhybrid\b"],
+    "browsing": [r"\bbrowsing\b", r"\bbrowse\b", r"\beveryday\b", r"\bhome use\b", r"\bcasual\b", r"\bgeneral use\b", r"\bweb\b", r"\binternet\b", r"\bbasic\b"],
+    "travel": [r"\btravel(ling|ing)?\b", r"\bbusiness trip\b", r"\bcommut(e|ing)\b", r"\bon the go\b", r"\bportable\b"],
+    "portability": [r"\blight(weight)?\b", r"\bcarry\b", r"\bportable\b", r"\bon the go\b", r"\beasy to carry\b"],
+    "battery": [r"\bbattery\b", r"\ball[- ]day\b", r"\bunplugged\b", r"\blong[- ]?lasting\b", r"\bcharge\b"],
+    "value": [r"\bvalue\b", r"\baffordable\b", r"\bbudget\b", r"\bcheap\b", r"\beconomical\b", r"\bworth\b"],
+    "premium": [r"\bpremium\b", r"\bhigh[- ]?end\b", r"\bflagship\b", r"\bluxury\b", r"\bbuild quality\b", r"\bsturdy\b"],
+    "shared_family": [r"\bshared\b", r"\bfamily\b", r"\beveryone\b", r"\bhousehold\b", r"\bmultiple users\b"],
+    "keyboard": [r"\bkeyboard\b", r"\btyping\b", r"\btypes? a lot\b", r"\btypist\b", r"\bwrites? (a lot|all day)\b"],
+    "parent": [r"\bparent\b", r"\bmother\b", r"\bfather\b", r"\bmom\b", r"\bdad\b", r"\belderly\b", r"\bsenior\b", r"\bgrandparent\b"],
+    "performance": [r"\bfast\b", r"\bpowerful\b", r"\bperformance\b", r"\bspeed\b", r"\bheavy\b", r"\bdemanding\b", r"\bpower user\b"],
+}
 
 
 def _merge_hard_filters(target, incoming):
@@ -130,6 +240,9 @@ class RecommendationScorer:
         'gaming_orientation': 0.0,
         'bulk_risk': 0.0,
         'complexity_risk': 0.0,
+        # Dormant unless the shopper mentions typing/keyboard (benefit mapping
+        # raises it); default 0 so it never shifts results unprompted.
+        'keyboard_quality': 0.0,
     }
 
     def _weight_floor_for_feature(self, feature_code):
@@ -334,33 +447,34 @@ class RecommendationScorer:
                     current = weights.get(feature_code, self._weight_floor_for_feature(feature_code))
                     weights[feature_code] = max(0.0, min(1.5, current + float(delta)))
 
-        # Also apply benefit_mappings from the packet (if available)
+        # Also apply benefit_mappings from the packet (if available).
+        # Matching is synonym-aware: a benefit fires when the answer text
+        # expresses that meaning, not only when the exact benefit word appears.
         if PACKETS_AVAILABLE and self.session.packet_id:
             try:
+                all_answer_text = " ".join(
+                    str(answer.answer_value or "").lower() for answer in self.answers
+                )
                 mappings = BenefitMapping.objects.filter(
                     packet_id=self.session.packet_id,
                 )
                 for mapping in mappings:
-                    # Check if any answer mentions this benefit
-                    benefit_name = mapping.benefit_name.lower()
-                    for answer in self.answers:
-                        if benefit_name in answer.answer_value.lower():
-                            code = mapping.feature_code
-                            impact = float(mapping.weight_impact)
-                            current = weights.get(code, 0.5)
-                            weights[code] = max(
-                                0.0, min(1.0, current + impact),
-                            )
+                    benefit_name = str(mapping.benefit_name or "").strip().lower()
+                    if not benefit_name:
+                        continue
+                    patterns = BENEFIT_SYNONYMS.get(benefit_name, [re.escape(benefit_name)])
+                    if _text_matches_any(all_answer_text, patterns):
+                        code = mapping.feature_code
+                        impact = float(mapping.weight_impact)
+                        current = weights.get(code, self._weight_floor_for_feature(code))
+                        weights[code] = max(0.0, min(1.5, current + impact))
             except Exception as e:
                 logger.warning('Error applying benefit mappings: %s', e)
 
         combined_answers = " ".join(
             str(answer.answer_value or "").lower() for answer in self.answers if not answer.from_voice
         )
-        if (
-            "best fit for today" in combined_answers
-            or "just regular student or office use" in combined_answers
-        ):
+        if self._wants_value_for_today(combined_answers):
             weights['processor'] = min(weights.get('processor', 0.66), 0.72)
             weights['ram'] = min(weights.get('ram', 0.56), 0.68)
             weights['graphics'] = min(weights.get('graphics', 0.28), 0.18)
@@ -371,7 +485,7 @@ class RecommendationScorer:
             weights['everyday_fit'] = max(weights.get('everyday_fit', 0.6), 1.15)
             weights['right_sized_performance'] = max(weights.get('right_sized_performance', 0.22), 1.2)
 
-        if "room to grow over time" in combined_answers:
+        if self._wants_future_headroom(combined_answers):
             weights['processor'] = max(weights.get('processor', 0.66), 0.9)
             weights['ram'] = max(weights.get('ram', 0.56), 0.86)
             weights['graphics'] = max(weights.get('graphics', 0.28), 0.32)
@@ -379,6 +493,120 @@ class RecommendationScorer:
             weights['right_sized_performance'] = min(weights.get('right_sized_performance', 0.22), 0.4)
 
         return weights
+
+    def _profile_intent_signals(self):
+        """Return (performance_need, value_sensitivity, overkill_tolerance) from
+        the structured preference profile, defaulting to 0.0 when missing."""
+        profile = getattr(self, 'preference_profile', {}) or {}
+
+        def _read(key):
+            try:
+                return float(profile.get(key, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        return (
+            _read('performance_need_level'),
+            _read('value_sensitivity'),
+            _read('overkill_tolerance'),
+        )
+
+    def _extract_size_preference(self):
+        """Return (lo, hi, firmness) when the shopper explicitly answered a
+        screen-size question, else None.
+
+        firmness 1.0 when mobility context corroborates the size ask (travel /
+        daily carry — size genuinely matters), 0.5 when it reads as taste.
+        """
+        size_answers = []
+        all_text_parts = []
+        for answer in self.answers:
+            if answer.from_voice:
+                continue
+            q = str(answer.question_text or '').lower()
+            a = str(answer.answer_value or '').lower()
+            all_text_parts.append(a)
+            if any(k in q for k in ('screen', 'display', 'size')) or 'inch' in a:
+                size_answers.append(a)
+
+        if not size_answers:
+            return None
+        size_text = ' '.join(size_answers)
+        if _text_matches_any(size_text, SIZE_NEUTRAL_PATTERNS):
+            return None
+
+        compact = _text_matches_any(size_text, SIZE_COMPACT_PATTERNS)
+        large = _text_matches_any(size_text, SIZE_LARGE_PATTERNS)
+        xl = _text_matches_any(size_text, SIZE_XL_PATTERNS)
+        # Ambiguous (mentions both bands) -> don't enforce anything.
+        if sum([compact, large, xl]) != 1:
+            return None
+
+        all_text = ' '.join(all_text_parts)
+        mobile = _text_matches_any(all_text, [
+            r"\btravel", r"\bcarry\b", r"\bcarries\b", r"\blight ?weight\b",
+            r"\bportable\b", r"\bon the go\b", r"\bcommut",
+        ])
+        firmness = 1.0 if mobile else 0.5
+
+        if compact:
+            return (12.4, 14.5, firmness)
+        if large:
+            return (14.9, 16.7, firmness)
+        return (16.8, 18.5, firmness)
+
+    def _extract_touch_preference(self):
+        """'standard' | 'touch' | None, from the touch/tablet question and the
+        discovery brief."""
+        voice_text = ' '.join(
+            str(a.answer_value or '').lower() for a in self.answers if a.from_voice
+        )
+        for answer in self.answers:
+            if answer.from_voice:
+                continue
+            q = str(answer.question_text or '').lower()
+            if not any(k in q for k in ('touch', 'tablet', 'convertible', '2-in-1')):
+                continue
+            a = str(answer.answer_value or '').lower()
+            if any(k in a for k in ('standard', 'no ', 'not ', "don't", 'regular laptop')):
+                return 'standard'
+            if any(k in a for k in ('touch', 'tablet', 'important', 'love', 'prefer', 'yes')):
+                return 'touch'
+
+        # The LLM doesn't always put "touch" in the question text (e.g. "How
+        # would your father prefer to interact with the laptop screen?" ->
+        # "Traditional laptop display"). A traditional/standard-laptop phrase in
+        # any answer is an explicit no-touch stance, and beats the voice brief.
+        qa_text = ' '.join(
+            str(a.answer_value or '').lower() for a in self.answers if not a.from_voice
+        )
+        if _text_matches_any(qa_text, [
+            r"\btraditional laptop\b", r"\bstandard laptop\b", r"\bno touch\b",
+            r"\bwithout touch\b", r"\bnon[- ]touch\b",
+        ]):
+            return 'standard'
+
+        if _text_matches_any(voice_text, [r"\btouch ?screen\b", r"\btablet mode\b", r"\bstylus\b", r"\bpen support\b", r"\b2-in-1\b"]):
+            return 'touch'
+        return None
+
+    def _wants_value_for_today(self, combined_answers):
+        """Shopper wants the right tool for today's needs / value, not headroom.
+
+        Reads the structured profile first (meaning-based, robust to wording),
+        then falls back to a broad synonym match over the answer text.
+        """
+        performance_need, value_sensitivity, overkill_tolerance = self._profile_intent_signals()
+        if value_sensitivity >= 0.6 and performance_need <= 0.45 and overkill_tolerance <= 0.45:
+            return True
+        return _text_matches_any(combined_answers, VALUE_TODAY_PATTERNS)
+
+    def _wants_future_headroom(self, combined_answers):
+        """Shopper wants performance headroom to grow into over time."""
+        performance_need, _value_sensitivity, overkill_tolerance = self._profile_intent_signals()
+        if overkill_tolerance >= 0.6 or performance_need >= 0.7:
+            return True
+        return _text_matches_any(combined_answers, FUTURE_HEADROOM_PATTERNS)
 
     def _apply_preference_profile_adjustments(self, weights):
         """
@@ -414,6 +642,65 @@ class RecommendationScorer:
 
         if self._is_capability_seeking_profile(profile):
             weights = self._apply_capability_weight_calibration(weights, profile, confidence)
+        elif self._is_value_simple_profile(profile):
+            weights = self._apply_value_simple_calibration(weights, profile)
+
+        return weights
+
+    def _is_value_simple_profile(self, profile):
+        """A value-focused, low-performance everyday shopper (e.g. a parent who
+        wants streaming/email/browsing). For these, mobility and premium should
+        not dominate — value, simplicity, and right-sized fit should lead."""
+        try:
+            performance = float(profile.get('performance_need_level', 0.0) or 0.0)
+            value_sensitivity = float(profile.get('value_sensitivity', 0.0) or 0.0)
+            overkill_tolerance = float(profile.get('overkill_tolerance', 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return False
+        # perf threshold sits at 0.65 (not 0.5) on purpose: the LLM profile
+        # jitters +/-0.1 between runs, and a strongly value-sensitive shopper
+        # shouldn't lose price discipline to that noise.
+        return value_sensitivity >= 0.55 and performance <= 0.65 and overkill_tolerance <= 0.5
+
+    def _apply_value_simple_calibration(self, weights, profile):
+        """Mirror of the capability calibration, for value/simple profiles.
+
+        Caps mobility and premium dimensions (unless the shopper actually asked
+        for portability/travel) so an expensive ultralight does not float to the
+        top for someone optimizing for simple, affordable everyday use.
+        """
+        weights = dict(weights)
+        usage_modes = set(profile.get('primary_usage_modes', []) or [])
+        has_mobility_need = bool(usage_modes & {'travel'})
+
+        # Mobility only matters if explicitly asked for. A small-screen / home
+        # profile should not chase the lightest premium machine.
+        if not has_mobility_need:
+            mobility_caps = {
+                'portability': 0.7,
+                'weight': 0.7,
+                'compactness': 0.8,
+            }
+            for code, cap in mobility_caps.items():
+                if code in weights:
+                    weights[code] = min(weights[code], cap)
+
+        # Premium / headroom are never the point for a simple value shopper.
+        premium_caps = {
+            'premium_experience': 0.3,
+            'creative_headroom': 0.3,
+            'graphics': 0.25,
+        }
+        for code, cap in premium_caps.items():
+            if code in weights:
+                weights[code] = min(weights[code], cap)
+
+        # Keep value, everyday fit, simplicity, and right-sized fit in front.
+        weights['price'] = max(weights.get('price', 0.0), 1.2)
+        weights['value_for_money'] = max(weights.get('value_for_money', 0.0), 1.2)
+        weights['everyday_fit'] = max(weights.get('everyday_fit', 0.0), 1.1)
+        weights['simplicity'] = max(weights.get('simplicity', 0.0), 0.9)
+        weights['right_sized_performance'] = max(weights.get('right_sized_performance', 0.0), 1.0)
 
         return weights
 
@@ -472,6 +759,21 @@ class RecommendationScorer:
                 if feature_code in weights:
                     weights[feature_code] = min(weights.get(feature_code, 0.0), cap)
 
+        # Performance-first shoppers who aren't mobile (e.g. a stationary gaming
+        # desk) shouldn't have the strongest machine penalized just for being
+        # heavy. Cap mobility weights unless they actually expressed travel/carry
+        # needs — mirror of the value-profile mobility cap.
+        has_mobility_need = bool(usage_modes & {'travel'})
+        if not has_mobility_need:
+            mobility_caps = {
+                'weight': 0.5,
+                'portability': 0.5,
+                'compactness': 0.6,
+            }
+            for feature_code, cap in mobility_caps.items():
+                if feature_code in weights:
+                    weights[feature_code] = min(weights.get(feature_code, 0.0), cap)
+
         return weights
 
     def _load_products(self):
@@ -511,12 +813,17 @@ class RecommendationScorer:
             for product in products:
                 features = {}
                 raw_feature_values = []
+                display_inches = None
+                display_touch = False
                 try:
                     fv_qs = FeatureValue.objects.filter(product=product).select_related('feature')
                     for fv in fv_qs:
                         raw_feature_values.append(
                             f"{fv.feature.feature_name}: {str(fv.value or '').strip()}"
                         )
+                        if fv.feature.feature_code == 'display_size':
+                            display_inches = _parse_display_inches(fv.value)
+                            display_touch = 'touch' in str(fv.value or '').lower()
                         if fv.normalized_value is None:
                             continue
                         features[fv.feature.feature_code] = fv.normalized_value
@@ -538,6 +845,8 @@ class RecommendationScorer:
                     'product_name': product.model,
                     'family': product.family,
                     'price': float(product.price),
+                    'display_inches': display_inches,
+                    'display_touch': display_touch,
                     'features': features,
                     'product_text': ' | '.join([
                         product.model,
@@ -741,6 +1050,8 @@ class RecommendationScorer:
                 'product_id': product['product_id'],
                 'product_name': product['product_name'],
                 'family': product.get('family', 'default'),
+                'display_inches': product.get('display_inches'),
+                'display_touch': product.get('display_touch', False),
                 'base_score': round(total_score, 4),
                 'final_score': round(total_score, 4),
                 'match_percentage': match_pct,
@@ -802,10 +1113,26 @@ class RecommendationScorer:
                     answer.score_effect.get('hard_filters', {}),
                 )
 
+        # When the shopper explicitly asked for touch, touch-capable machines
+        # are exempt from screen-size floors: a stated need (touch) must not be
+        # silently disqualified by a size preference it cannot coexist with
+        # (the catalog may have no large touch devices at all). They still face
+        # every other floor, and the soft size penalty handles the trade-off.
+        touch_pref = self._extract_touch_preference()
+
         # Apply: if product feature < minimum threshold, disqualify
         for product in scored:
             breakdown = product['scoring_breakdown']['feature_scores']
+            touch_capable = bool(product.get('display_touch')) or _product_form_factor(
+                product.get('product_name')
+            ) in ('convertible', 'detachable', 'dual_screen')
             for feature_code, min_value in hard_filters.items():
+                if (
+                    touch_pref == 'touch'
+                    and touch_capable
+                    and feature_code in ('display_size', 'large_display')
+                ):
+                    continue
                 fit = breakdown.get(feature_code, {}).get('fit', 0.0)
                 if fit < float(min_value):
                     product['disqualified'] = True
@@ -828,6 +1155,21 @@ class RecommendationScorer:
         if not intent_profile:
             return scored
 
+        # Session-level stated preferences (None when not expressed).
+        size_pref = self._extract_size_preference()
+        touch_pref = self._extract_touch_preference()
+        # Form-factor penalty/boost per stance. Stated preferences are strong
+        # defaults, not handcuffs: every value here is small enough that a
+        # clearly superior machine can still overcome it.
+        if touch_pref == 'standard':
+            form_factor_adjust = {'convertible': 0.06, 'detachable': 0.10, 'dual_screen': 0.12}
+        elif touch_pref == 'touch':
+            form_factor_adjust = {'convertible': -0.05, 'detachable': -0.03, 'dual_screen': -0.02}
+        else:
+            # Never asked: exotic form factors shouldn't lead unprompted,
+            # but only get a mild dampening.
+            form_factor_adjust = {'convertible': 0.02, 'detachable': 0.05, 'dual_screen': 0.07}
+
         for product in scored:
             breakdown = product.get('scoring_breakdown', {})
             feature_scores = breakdown.get('feature_scores', {})
@@ -845,6 +1187,57 @@ class RecommendationScorer:
                 final_fit = max(0.0, min(1.0, raw_fit * 0.25 + intent_fit * 0.30 + profile_fit * 0.45))
             else:
                 final_fit = max(0.0, min(1.0, raw_fit * 0.45 + intent_fit * 0.55))
+
+            # Price discipline for value-sensitive, simple-use shoppers.
+            # The intent/profile layers reward "the right kind of laptop" but
+            # ignore price, so an expensive premium machine can edge out a
+            # much cheaper one that fits just as well. Penalize price for these
+            # profiles, scaled by how value-sensitive the shopper is and how
+            # expensive the product is (price fit: 1=cheapest, 0=priciest).
+            preference_profile = getattr(self, 'preference_profile', {}) or {}
+            if self._is_value_simple_profile(preference_profile):
+                try:
+                    value_sensitivity = float(preference_profile.get('value_sensitivity', 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    value_sensitivity = 0.0
+                price_fit = float(features.get('price', 0.5) or 0.5)
+                price_penalty = 0.6 * value_sensitivity * (1.0 - price_fit)
+                final_fit = max(0.0, final_fit - price_penalty)
+
+            # Stated screen-size preference: a per-inch fine for sitting outside
+            # the asked band. ~7 pts/inch when mobility makes size load-bearing,
+            # half that when it reads as taste; capped so it can never bury an
+            # otherwise dramatically better machine on its own.
+            # When the shopper explicitly asked for touch, touch-capable
+            # machines are exempt from the size fine: an explicitly stated
+            # need (touch) outranks a size preference it cannot coexist with
+            # (e.g. catalog has no 15-16" touch devices). A salesperson would
+            # say "the touch one only comes in 14-inch" — not hide it.
+            form = _product_form_factor(product.get('product_name'))
+            touch_capable = bool(product.get('display_touch')) or form in (
+                'convertible', 'detachable', 'dual_screen',
+            )
+            size_waived = touch_pref == 'touch' and touch_capable
+
+            size_penalty = 0.0
+            inches = product.get('display_inches')
+            if size_pref and inches and not size_waived:
+                lo, hi, firmness = size_pref
+                inches_off = max(0.0, lo - inches, inches - hi)
+                size_penalty = min(0.18, inches_off * 0.07 * firmness)
+                final_fit = max(0.0, final_fit - size_penalty)
+
+            # Form-factor alignment with the touch/tablet answer.
+            form_adjust = form_factor_adjust.get(form, 0.0)
+            if form_adjust:
+                final_fit = max(0.0, min(1.0, final_fit - form_adjust))
+
+            breakdown['stated_preference_adjustments'] = {
+                'size_penalty': round(size_penalty, 3),
+                'size_penalty_waived_for_touch': size_waived,
+                'form_factor': form,
+                'form_factor_adjustment': round(form_adjust, 3),
+            }
             max_possible = sum(
                 float(detail.get('weight', 0.0) or 0.0)
                 for detail in feature_scores.values()

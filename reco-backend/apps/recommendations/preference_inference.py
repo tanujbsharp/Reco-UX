@@ -213,8 +213,10 @@ def infer_answer_score_effect(question_text: str, answer_value: str) -> dict:
         _add(adjustments, "build_quality", 0.1)
 
     if _has_any(answer_text, COMPACT_SCREEN_TERMS):
+        # A small-screen preference means a compact form factor — it does NOT
+        # imply the shopper prioritizes a featherweight/ultraportable machine.
+        # (Mobility priority comes from explicit travel/carry answers instead.)
         _add(adjustments, "compactness", 0.55)
-        _add(adjustments, "portability", 0.15)
         _add(adjustments, "large_display", -0.35)
         _add(adjustments, "display_size", -0.2)
 

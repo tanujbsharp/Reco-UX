@@ -19,6 +19,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.comparisons.comparator import compare_products, ProductNotFoundError
+from apps.sessions_app.models import CustomerSession
 
 logger = logging.getLogger(__name__)
 
@@ -84,13 +85,26 @@ def compare_products_view(request):
     # Derive cmid from the authenticated user (tenant scoping)
     cmid = getattr(request.user, 'cmid', 0)
 
+    # Optional session: lets the comparison weigh each spec against what this
+    # shopper actually needs (the "stronger for you" vs "more than you need"
+    # framing). Falls back to objective-only when absent or not owned.
+    session = None
+    session_id = request.data.get('session_id')
+    if session_id is not None:
+        try:
+            candidate = CustomerSession.objects.get(pk=int(session_id))
+            if candidate.user_id == request.user.id:
+                session = candidate
+        except (CustomerSession.DoesNotExist, ValueError, TypeError):
+            session = None
+
     # --- Run comparison ---
     try:
         result = compare_products(
             product_id_1=product_id_1,
             product_id_2=product_id_2,
             cmid=cmid,
-            session=None,  # No session context for standalone comparisons
+            session=session,
         )
     except ProductNotFoundError as e:
         return Response(

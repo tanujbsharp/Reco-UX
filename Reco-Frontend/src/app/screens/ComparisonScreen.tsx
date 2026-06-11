@@ -102,6 +102,10 @@ function resolveImplications(product: (typeof mockProducts)[number]) {
   return sanitizeCustomerFacingList([...product.matchedBenefits, ...product.tradeOffs]).slice(0, 4);
 }
 
+// Temporarily hidden — flip to true to re-enable the objective "Stronger"
+// per-spec badges. Backend verdicts (spec_verdicts) are still computed.
+const SHOW_STRONGER_BADGES = false;
+
 export function ComparisonScreen() {
   const navigate = useNavigate();
   const {
@@ -109,6 +113,7 @@ export function ComparisonScreen() {
     clearSelectedProducts,
     setSelectedProductId,
     availableProducts,
+    sessionId,
   } = useJourney();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [apiComparisonData, setApiComparisonData] = useState<Record<string, unknown> | null>(null);
@@ -127,7 +132,7 @@ export function ComparisonScreen() {
     const id1 = Number(productsToCompare[0].id) || 0;
     const id2 = Number(productsToCompare[1].id) || 0;
     if (id1 && id2) {
-      compareProducts(id1, id2)
+      compareProducts(id1, id2, sessionId)
         .then((data) => {
           setApiComparisonData(data);
         })
@@ -138,7 +143,7 @@ export function ComparisonScreen() {
     } else {
       setComparisonLoading(false);
     }
-  }, [productsToCompare]);
+  }, [productsToCompare, sessionId]);
 
   useEffect(() => {
     if (productsToCompare.length !== 2) {
@@ -151,6 +156,60 @@ export function ComparisonScreen() {
   }
 
   const [leftProduct, rightProduct] = productsToCompare;
+
+  // Needs-aware verdicts from the backend: which spec is objectively stronger,
+  // and whether that win actually matters to this shopper. When unavailable
+  // (still loading / API failed), fall back to the local winner heuristics.
+  const specVerdicts = Array.isArray((apiComparisonData as Record<string, unknown> | null)?.spec_verdicts)
+    ? ((apiComparisonData as Record<string, unknown>).spec_verdicts as Array<Record<string, unknown>>)
+    : null;
+  const verdictByKey = new Map<string, Record<string, unknown>>();
+  if (specVerdicts) {
+    for (const entry of specVerdicts) {
+      const key = String(entry.key ?? "");
+      if (key) verdictByKey.set(key, entry);
+    }
+  }
+  const rowLabelToVerdictKey: Record<string, string> = {
+    Chip: "chip",
+    Graphics: "graphics",
+    Memory: "memory",
+    Storage: "storage",
+    Display: "display",
+    Battery: "battery",
+    Weight: "weight",
+  };
+
+  // Returns which side is objectively stronger for a spec (or null for ties /
+  // non-comparable rows). Purely objective — not tied to the recommendation.
+  const resolveRowBadge = (
+    label: string,
+    localWinnerId: string | undefined,
+  ): { side: "left" | "right" } | null => {
+    const key = rowLabelToVerdictKey[label];
+    const verdictEntry = key ? verdictByKey.get(key) : undefined;
+
+    if (verdictEntry) {
+      if (String(verdictEntry.verdict ?? "neutral") !== "stronger") {
+        return null; // tie / not comparable -> no badge
+      }
+      const winner = verdictEntry.objective_winner;
+      if (winner === "product_1") return { side: "left" };
+      if (winner === "product_2") return { side: "right" };
+      return null;
+    }
+
+    // While the request is still in flight, show nothing (avoids flashing the
+    // old heuristic badge and then correcting it once verdicts arrive).
+    if (comparisonLoading) return null;
+
+    // Fallback: backend verdicts unavailable (failed / mock data) — use the
+    // old local winner so the screen is never badge-less.
+    if (key && localWinnerId === leftProduct.id) return { side: "left" };
+    if (key && localWinnerId === rightProduct.id) return { side: "right" };
+    return null;
+  };
+
   const leftFallbackVisual = fallbackVisualForProduct(leftProduct.id);
   const rightFallbackVisual = fallbackVisualForProduct(rightProduct.id);
   const leftImage = hasRenderableValue(leftProduct.image) ? leftProduct.image : leftFallbackVisual.image;
@@ -360,8 +419,9 @@ export function ComparisonScreen() {
           {/* Unified Comparison Table with Labels Down the Middle */}
           <div className="space-y-3 relative z-10">
             {compareRows.map((row) => {
-              const isLeftWinner = row.winner === leftProduct.id;
-              const isRightWinner = row.winner === rightProduct.id;
+              const badge = SHOW_STRONGER_BADGES ? resolveRowBadge(row.label, row.winner) : null;
+              const isLeftWinner = badge?.side === "left";
+              const isRightWinner = badge?.side === "right";
 
               return (
                 <div key={row.label} className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-6">
