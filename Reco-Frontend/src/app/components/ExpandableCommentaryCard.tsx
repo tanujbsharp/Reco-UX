@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, type Variants } from "motion/react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "./ui/utils";
 
@@ -18,7 +18,7 @@ export function ExpandableCommentaryCard({
 }: ExpandableCommentaryCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const detailVariants = {
+  const detailVariants: Variants = {
     hidden: { opacity: 0, height: 0 },
     visible: {
       opacity: 1,

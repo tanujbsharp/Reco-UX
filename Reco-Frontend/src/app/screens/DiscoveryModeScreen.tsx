@@ -78,7 +78,7 @@ export function DiscoveryModeScreen() {
             "Tell us what you need in voice or text",
             "Answer a few targeted follow-up questions",
             "Receive AI-matched PC recommendations",
-            "Compare your top two options side by side",
+            "Compare your top picks side by side",
             "Connect with a store expert to wrap up",
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-3">
@@ -125,7 +125,7 @@ export function DiscoveryModeScreen() {
             Find your perfect PC
           </h1>
           <p className="mx-auto max-w-xl text-lg leading-8 text-slate-600">
-            Tell us what you need in your own words. Our AI understands your requirements and surfaces the best options.
+            Describe what you need — we'll find the best fits.
           </p>
         </motion.div>
 
@@ -140,7 +140,7 @@ export function DiscoveryModeScreen() {
           >
             <WorkflowBuilderCard
               title="Start with Voice"
-              description="Speak naturally in Hindi, English, or mix both. Just describe what you're looking for."
+              description="Speak in Hindi, English, or both."
               icon={<Mic className="h-7 w-7 text-white" />}
               iconContainerClass="bg-white/20 ring-1 ring-white/30"
               bgClass="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 shadow-[0_16px_48px_rgba(37,99,235,0.3)] hover:shadow-[0_32px_80px_rgba(37,99,235,0.48)] focus-visible:outline-none"
@@ -192,7 +192,7 @@ export function DiscoveryModeScreen() {
           >
             <WorkflowBuilderCard
               title="Answer Questions"
-              description="Prefer a structured approach? We'll guide you step by step to understand your exact needs."
+              description="Prefer questions? We'll guide you step by step."
               icon={<ListChecks className="h-7 w-7 text-slate-700" />}
               iconContainerClass="bg-slate-100 ring-1 ring-slate-200"
               bgClass="bg-white shadow-[0_8px_30px_rgba(15,23,42,0.07)] hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] focus-visible:outline-none"

@@ -20,7 +20,7 @@ import { Badge } from "../components/ui/badge";
 import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
-import { sanitizeCustomerFacingText } from "../utils/customerCopy";
+import { formatTagLabel, sanitizeCustomerFacingText } from "../utils/customerCopy";
 
 export function LeadCaptureScreen() {
   const navigate = useNavigate();
@@ -65,8 +65,8 @@ export function LeadCaptureScreen() {
     });
 
     const tagHighlights = voiceTags.slice(0, 3).map((tag) => ({
-      label: tag.category,
-      value: tag.text,
+      label: formatTagLabel(tag.category),
+      value: formatTagLabel(tag.text),
     }));
 
     const combined = [...tagHighlights, ...answerHighlights].slice(0, 5);
@@ -141,7 +141,7 @@ export function LeadCaptureScreen() {
             ))
           ) : (
             <p className="text-sm leading-6 text-emerald-800">
-              The handoff summary will become richer as the discovery and question flow is completed.
+              Fills in as you go.
             </p>
           )}
         </div>
@@ -366,7 +366,7 @@ export function LeadCaptureScreen() {
                     id="handoff-note"
                     value={storeNote}
                     onChange={(event) => setStoreNote(event.target.value)}
-                    placeholder="Example: compare Air and Pro for Xcode, or explain whether the 14-inch Pro is worth the jump."
+                    placeholder="e.g. Is the 14-inch worth the jump?"
                     className="min-h-[140px] rounded-[22px] border-slate-200 bg-black/5 p-4"
                   />
                 </div>

@@ -172,7 +172,7 @@ export function VoiceDiscoveryScreen() {
         } catch (error) {
           console.error("transcribeAudio API failed:", error);
           setState("idle");
-          setApiError("We couldn’t transcribe that recording. Please try again or switch to typed input.");
+          setApiError("Couldn’t catch that — try again or type.");
         }
       });
 
@@ -300,7 +300,7 @@ export function VoiceDiscoveryScreen() {
                   Tell us what you&apos;re looking for
                 </h1>
                 <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
-                  Speak naturally or type your need. We&apos;ll extract the key signals to shape your PC shortlist.
+                  Speak or type — we&apos;ll pick up the details.
                 </p>
               </div>
             </div>

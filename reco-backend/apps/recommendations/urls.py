@@ -14,4 +14,14 @@ urlpatterns = [
         views.get_product_detail,
         name='get_product_detail',
     ),
+    path(
+        'products/',
+        views.search_products,
+        name='search_products',
+    ),
+    path(
+        'sessions/<int:session_id>/product-fit/<int:product_id>',
+        views.get_product_fit,
+        name='get_product_fit',
+    ),
 ]

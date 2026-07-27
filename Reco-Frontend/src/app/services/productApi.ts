@@ -11,6 +11,15 @@ export async function getPacket(packetId: number) {
 }
 
 export async function searchProducts(query: string) {
-  const res = await apiFetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+  const res = await apiFetch(`/api/products/?q=${encodeURIComponent(query)}`);
+  return readJsonResponse(res);
+}
+
+/**
+ * Score any catalog product against the session's answers. Returns the same
+ * record shape as a recommendation, including personalized implications.
+ */
+export async function getProductFit(sessionId: number, productId: number) {
+  const res = await apiFetch(`/api/sessions/${sessionId}/product-fit/${productId}`);
   return readJsonResponse(res);
 }

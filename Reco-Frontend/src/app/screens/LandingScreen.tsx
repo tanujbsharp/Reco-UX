@@ -43,7 +43,7 @@ export function LandingScreen() {
                     Premium in-store PC recommendations, built for guided selling.
                   </h1>
                   <p className="max-w-2xl text-sm leading-6 text-slate-600 md:text-[15px]">
-                    This experience walks you from open discovery to confident PC selection through voice or typed input, adaptive questions, side-by-side comparison, and an assisted handoff.
+                    From a quick chat to your perfect PC — in a few guided steps.
                   </p>
                 </div>
 

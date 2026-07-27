@@ -55,7 +55,7 @@ export function ConsentScreen() {
           <div>
             <h4 className="text-sm font-semibold text-emerald-900">Privacy-first framing</h4>
             <p className="mt-1 text-sm leading-6 text-emerald-800">
-              Your information is used to personalize recommendations and enable follow-up. We respect your privacy.
+              Used only to personalize and follow up.
             </p>
           </div>
         </div>
@@ -90,7 +90,7 @@ export function ConsentScreen() {
                   <div>
                     <h1 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">Let&apos;s get started</h1>
                     <p className="mt-1.5 max-w-2xl text-base leading-7 text-slate-600">
-                      Tell us a bit about you so that we can provide the best PC recommendation for your needs.
+                      A few details to personalize your recommendations.
                     </p>
                   </div>
                 </div>
@@ -193,7 +193,7 @@ export function ConsentScreen() {
 
               <div className="flex flex-col gap-4 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="max-w-xl text-sm leading-5 text-slate-500">
-                  Your information is used to personalize recommendations and enable follow-up. We respect your privacy.
+                  Used only to personalize and follow up.
                 </p>
                 <Button
                   size="lg"

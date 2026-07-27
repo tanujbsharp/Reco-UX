@@ -4,6 +4,8 @@ import { ArrowLeft, MessageCircle, TimerReset } from "lucide-react";
 import { motion } from "motion/react";
 import { CommentaryPanel } from "./CommentaryPanel";
 import { AppBackground } from "./AppBackground";
+import { ProgressDonut } from "./ProgressDonut";
+import { useJourney } from "../context/JourneyContext";
 import { Sheet, SheetContent, SheetTrigger } from "../components/ui/sheet";
 import { Button } from "../components/ui/button";
 import { cn } from "./ui/utils";
@@ -27,7 +29,7 @@ interface TwoZoneLayoutProps {
   transparentMain?: boolean;
 }
 
-function ProgressDots({
+function HeaderProgress({
   current = 0,
   total = 0,
   label,
@@ -41,28 +43,13 @@ function ProgressDots({
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 rounded-full border border-[#2563eb]/15 bg-white/90 py-1.5 pl-4 pr-2 shadow-[0_8px_24px_rgba(37,99,235,0.10)]">
       {label && (
-        <span className="hidden text-xs font-medium uppercase tracking-[0.2em] text-slate-400 xl:inline">
+        <span className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 sm:inline">
           {label}
         </span>
       )}
-      <div className="flex items-center gap-2">
-        {Array.from({ length: total }).map((_, index) => {
-          const active = index < current;
-          const currentDot = index + 1 === current;
-          return (
-            <div
-              key={index}
-              className={cn(
-                "h-2 rounded-full transition-all duration-300",
-                active ? "w-6 bg-[#2563eb]" : "w-2 bg-slate-200",
-                currentDot && "shadow-[0_0_0_5px_rgba(59,130,246,0.12)]"
-              )}
-            />
-          );
-        })}
-      </div>
+      <ProgressDonut current={current} total={total} size={46} strokeWidth={5} title={label} />
     </div>
   );
 }
@@ -87,6 +74,7 @@ export function TwoZoneLayout({
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { resetJourney } = useJourney();
   const canRestart = useMemo(() => {
     if (typeof showStartOver === "boolean") {
       return showStartOver;
@@ -127,7 +115,7 @@ export function TwoZoneLayout({
               </div>
 
               <div className="flex items-center gap-2 md:gap-3">
-                <ProgressDots current={progressStep} total={progressTotal} label={stepLabel} />
+                <HeaderProgress current={progressStep} total={progressTotal} label={stepLabel} />
                 {backHref !== undefined && (
                   <Button
                     variant="outline"
@@ -141,13 +129,18 @@ export function TwoZoneLayout({
                 )}
                 {canRestart && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => navigate(startOverHref)}
-                    className="gap-2 rounded-full px-4 text-slate-600 hover:bg-white/80 hover:text-slate-900"
+                    onClick={() => {
+                      // Full reset: a new customer must never see the previous
+                      // shopper's details (name/phone/email), answers, or picks.
+                      resetJourney();
+                      navigate(startOverHref);
+                    }}
+                    className="gap-2 rounded-full border-rose-200 bg-rose-50 px-4 font-semibold text-rose-600 shadow-sm hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
                   >
                     <TimerReset className="h-4 w-4" />
-                    <span className="hidden sm:inline">Start over</span>
+                    <span>Start over</span>
                   </Button>
                 )}
               </div>

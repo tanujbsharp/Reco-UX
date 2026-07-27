@@ -91,6 +91,7 @@ interface JourneyContextType {
   resetAnswers: () => void;
   selectedProducts: string[];
   toggleProductSelection: (id: string) => void;
+  addComparisonProduct: (product: Product) => void;
   clearSelectedProducts: () => void;
   selectedProductId: string | null;
   setSelectedProductId: (id: string | null) => void;
@@ -102,7 +103,7 @@ interface JourneyContextType {
   recommendationFeedbackStars: number | null;
   setRecommendationFeedbackStars: (value: number | null) => void;
   availableProducts: Product[];
-  setAvailableProducts: (products: Product[]) => void;
+  setAvailableProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   resetJourneyProgress: () => void;
   resetJourney: () => void;
 }
@@ -175,11 +176,25 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
         return prev.filter((pid) => pid !== id);
       }
 
-      if (prev.length >= 2) {
+      if (prev.length >= 3) {
         return prev;
       }
 
       return [...prev, id];
+    });
+  };
+
+  // A product added from catalog search: register it in the working catalog
+  // (so the comparison/detail screens can resolve it) and select it.
+  const addComparisonProduct = (product: Product) => {
+    setAvailableProducts((prev) =>
+      prev.some((existing) => existing.id === product.id) ? prev : [...prev, product]
+    );
+    setSelectedProducts((prev) => {
+      if (prev.includes(product.id) || prev.length >= 3) {
+        return prev;
+      }
+      return [...prev, product.id];
     });
   };
 
@@ -233,6 +248,7 @@ export function JourneyProvider({ children }: { children: ReactNode }) {
         resetAnswers,
         selectedProducts,
         toggleProductSelection,
+        addComparisonProduct,
         clearSelectedProducts,
         selectedProductId,
         setSelectedProductId,

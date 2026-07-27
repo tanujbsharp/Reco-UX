@@ -1354,3 +1354,122 @@ def _get_stub_product_detail(product_id):
         'accessories': [],
         'finance_schemes': [],
     }
+
+
+# ---------------------------------------------------------------------------
+# Catalog search + per-session product fit (compare-anything support)
+# ---------------------------------------------------------------------------
+
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def search_products(request):
+    """
+    GET /api/products/?q=<query>
+
+    Lightweight tenant-catalog search used by "add a PC to the comparison".
+    Returns id, model, family, price, and hero image for up to 25 matches.
+    """
+    if not PACKETS_AVAILABLE:
+        return Response([])
+
+    from django.db.models import Q
+    from apps.packets.models import ProductContent
+
+    query = str(request.GET.get('q', '')).strip()
+    cmid = getattr(request.user, 'cmid', 0)
+
+    products = Product.objects.filter(packet__cmid=cmid)
+    if query:
+        products = products.filter(Q(model__icontains=query) | Q(family__icontains=query))
+    products = list(products.order_by('model')[:25])
+
+    heroes = {
+        content.product_id: (content.hero_image_url or (content.gallery_urls or [''])[0] or '')
+        for content in ProductContent.objects.filter(product__in=products)
+    }
+
+    return Response([
+        {
+            'product_id': product.product_id,
+            'id': str(product.product_id),
+            'model': product.model,
+            'family': product.family,
+            'price': float(product.price),
+            'image': heroes.get(product.product_id, ''),
+        }
+        for product in products
+    ])
+
+
+@api_view(['GET'])
+@authentication_classes([CsrfExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def get_product_fit(request, session_id, product_id):
+    """
+    GET /api/sessions/<session_id>/product-fit/<product_id>
+
+    Score ANY catalog product against this session's answers and return it in
+    the exact record shape recommendations use — so a product added to the
+    comparison from search carries the same personalized implications,
+    trade-offs, and highlights as the recommended ones.
+    """
+    try:
+        session = CustomerSession.objects.get(pk=session_id)
+    except CustomerSession.DoesNotExist:
+        return Response({'detail': 'Session not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if session.user_id != request.user.id:
+        return Response(
+            {'detail': 'You do not have permission to access this session.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if not PACKETS_AVAILABLE:
+        return Response({'detail': 'Catalog unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return Response({'detail': 'Product not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Score the full catalog for this session and pick out this product.
+    # (The scorer is session-wide anyway; top_n only truncates the tail.)
+    try:
+        scorer = RecommendationScorer(session_id)
+        scored = scorer.calculate_scores(top_n=200)
+    except Exception:
+        logger.exception('Product-fit scoring failed for session %s', session_id)
+        scored = []
+
+    entry = next((item for item in scored if item.get('product_id') == product_id), None)
+    if entry is None:
+        # Product was disqualified by a hard filter (e.g. screen-size floor).
+        # Still return an honest record instead of an error.
+        entry = {
+            'product_id': product_id,
+            'product_name': product.model,
+            'final_score': 0.0,
+            'match_percentage': 0,
+            'scoring_breakdown': {'disqualified': True},
+        }
+
+    from apps.recommendations.explanation import generate_explanation
+    answers = list(SessionAnswer.objects.filter(session=session).order_by('created_at'))
+    explanation = generate_explanation(session, entry, answers=answers)
+
+    # An unsaved RecommendationResult rides through the standard serializer so
+    # the response shape matches recommendation records exactly.
+    pseudo_result = RecommendationResult(
+        session=session,
+        product_id=product_id,
+        rank=0,
+        final_score=float(entry.get('final_score', 0.0) or 0.0),
+        match_percentage=int(entry.get('match_percentage', 0) or 0),
+        explanation_text=json.dumps(explanation),
+        scoring_breakdown=entry.get('scoring_breakdown'),
+    )
+    record = _serialize_results([pseudo_result])[0]
+    record['result_id'] = None
+    record['added_from_search'] = True
+    return Response(record)

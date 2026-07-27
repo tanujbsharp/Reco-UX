@@ -17,6 +17,10 @@ function timestamp() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+// Chat hidden everywhere for now — flip to bring back the floating bubble on
+// the product detail and comparison pages.
+const PRODUCT_CHAT_ENABLED = false;
+
 export function ProductChatWidget({ contextProducts }: { contextProducts: Product[] }) {
   const { sessionId } = useJourney();
   const [isOpen, setIsOpen] = useState(false);
@@ -48,6 +52,11 @@ export function ProductChatWidget({ contextProducts }: { contextProducts: Produc
   useEffect(() => {
     scrollToBottom();
   }, [messages, isOpen]);
+
+  // After all hooks so React's hook order stays stable.
+  if (!PRODUCT_CHAT_ENABLED) {
+    return null;
+  }
 
   const appendBotMessage = (text: string) => {
     setMessages((prev) => [

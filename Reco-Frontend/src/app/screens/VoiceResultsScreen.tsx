@@ -231,13 +231,6 @@ export function VoiceResultsScreen() {
           {discoveryText || "Your discovery input will appear here."}
         </div>
       </div>
-
-      <div className="rounded-3xl border border-emerald-200 bg-emerald-50/50 p-5">
-        <h3 className="text-lg font-bold tracking-tight text-slate-950">What happens next?</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          These tags will pre-select relevant answers in the next step, but you can override any of them before the recommendations are generated.
-        </p>
-      </div>
     </div>
   );
 
@@ -284,7 +277,7 @@ export function VoiceResultsScreen() {
                   <div className="text-[12px] font-bold uppercase tracking-wider text-violet-500">Detected user type</div>
                   <div className="mt-2 text-lg font-semibold text-slate-900">{formatArchetypeLabel(detectedArchetype)}</div>
                   <p className="mt-1 text-sm text-slate-600">
-                    This will influence the follow-up questions and the final recommendations.
+                    Shapes your questions and recommendations.
                   </p>
                 </div>
               ) : null}

@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowRight, Check, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowRight, Check, HelpCircle, Plus, TriangleAlert, X } from "lucide-react";
 import { motion } from "motion/react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { mockCommentary, mockProducts } from "../data/mockData";
+import { mockProducts } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
 import { ProductChatWidget } from "../components/ProductChatWidget";
+import { ProductSearchDialog } from "../components/ProductSearchDialog";
 import { compareProducts } from "../services/comparisonApi";
 import { sanitizeCustomerFacingList } from "../utils/customerCopy";
+import { mapRecommendationRecord } from "./RecommendationsScreen";
 
 function chipScore(value: string) {
   const lower = value.toLowerCase();
@@ -94,12 +96,27 @@ function fallbackVisualForProduct(productId: string) {
   return mockProducts[safeIndex] ?? mockProducts[0];
 }
 
+// Phrases that mark an implication as a trade-off, used only when the
+// structured matchedBenefits/tradeOffs split is unavailable (mock data).
+const NEGATIVE_IMPLICATION_PATTERN =
+  /\b(not|no|unsuitable|lacks?|limited|heavier|bulkier|weaker|less|avoid|struggles?|downside|isn'?t|won'?t|can'?t|compromise[sd]?|overkill)\b/i;
+
+/**
+ * Strengths get a green check; trade-offs get an amber marker — a green
+ * check next to "unsuitable for gaming" reads as praise, which is wrong.
+ */
 function resolveImplications(product: (typeof mockProducts)[number]) {
-  if (product.implications.length > 0) {
-    return sanitizeCustomerFacingList(product.implications).slice(0, 4);
+  const pros = sanitizeCustomerFacingList(product.matchedBenefits);
+  const cons = sanitizeCustomerFacingList(product.tradeOffs);
+  if (pros.length > 0 || cons.length > 0) {
+    return { pros: pros.slice(0, 3), cons: cons.slice(0, 2) };
   }
 
-  return sanitizeCustomerFacingList([...product.matchedBenefits, ...product.tradeOffs]).slice(0, 4);
+  const merged = sanitizeCustomerFacingList(product.implications);
+  return {
+    pros: merged.filter((item) => !NEGATIVE_IMPLICATION_PATTERN.test(item)).slice(0, 3),
+    cons: merged.filter((item) => NEGATIVE_IMPLICATION_PATTERN.test(item)).slice(0, 2),
+  };
 }
 
 // Temporarily hidden — flip to true to re-enable the objective "Stronger"
@@ -112,12 +129,15 @@ export function ComparisonScreen() {
     selectedProducts,
     clearSelectedProducts,
     setSelectedProductId,
+    toggleProductSelection,
+    addComparisonProduct,
     availableProducts,
     sessionId,
   } = useJourney();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [apiComparisonData, setApiComparisonData] = useState<Record<string, unknown> | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const productCatalog = availableProducts.length > 0 ? availableProducts : mockProducts;
   const productsToCompare = useMemo(
@@ -146,16 +166,19 @@ export function ComparisonScreen() {
   }, [productsToCompare, sessionId]);
 
   useEffect(() => {
-    if (productsToCompare.length !== 2) {
+    if (productsToCompare.length < 2) {
       navigate("/recommendations");
     }
   }, [navigate, productsToCompare.length]);
 
-  if (productsToCompare.length !== 2) {
+  if (productsToCompare.length < 2) {
     return null;
   }
 
-  const [leftProduct, rightProduct] = productsToCompare;
+  // 2 or 3 products; the first two also back the pairwise verdict fallbacks.
+  const products = productsToCompare.slice(0, 3);
+  const isTriple = products.length === 3;
+  const [leftProduct, rightProduct] = products;
 
   // Needs-aware verdicts from the backend: which spec is objectively stronger,
   // and whether that win actually matters to this shopper. When unavailable
@@ -210,12 +233,9 @@ export function ComparisonScreen() {
     return null;
   };
 
-  const leftFallbackVisual = fallbackVisualForProduct(leftProduct.id);
-  const rightFallbackVisual = fallbackVisualForProduct(rightProduct.id);
-  const leftImage = hasRenderableValue(leftProduct.image) ? leftProduct.image : leftFallbackVisual.image;
-  const rightImage = hasRenderableValue(rightProduct.image) ? rightProduct.image : rightFallbackVisual.image;
-  const leftImplications = resolveImplications(leftProduct);
-  const rightImplications = resolveImplications(rightProduct);
+  const imageFor = (product: (typeof products)[number]) =>
+    hasRenderableValue(product.image) ? product.image : fallbackVisualForProduct(product.id).image;
+  const fallbackImageFor = (product: (typeof products)[number]) => fallbackVisualForProduct(product.id).image;
   const carryWinnerId = winnerIdByLowerMetric(
     parseMetric(leftProduct.weight),
     parseMetric(rightProduct.weight),
@@ -246,44 +266,49 @@ export function ComparisonScreen() {
     leftProduct.id,
     rightProduct.id,
   );
-  const betterCarryProduct = carryWinnerId === rightProduct.id ? rightProduct : leftProduct;
-  const betterPowerProduct = powerWinnerId === rightProduct.id ? rightProduct : leftProduct;
+  // "Best at" picks generalize across 2 or 3 products.
+  const betterCarryProduct = products.reduce((best, candidate) =>
+    parseMetric(candidate.weight) > 0 && parseMetric(candidate.weight) < parseMetric(best.weight) ? candidate : best
+  );
+  const betterPowerProduct = products.reduce((best, candidate) =>
+    overallPowerScore(candidate) > overallPowerScore(best) ? candidate : best
+  );
   const carryImplication =
     betterCarryProduct.implications[0] ||
-    "It is the lighter carry, so it wins if you move around often or work away from a desk.";
+    "Lighter — better for moving around.";
   const powerImplication =
     betterPowerProduct.implications[0] ||
-    "It is the safer pick if coding, design, editing, or multi-monitor use will grow over time.";
+    "More headroom for the long run.";
   const recommendationImplication =
     betterPowerProduct.implications[1] ||
     `Choose it if you value flexibility and fewer future compromises. Pick ${betterCarryProduct.model} if effortless carry matters more.`;
 
+  const rowOf = (label: string, field: (p: (typeof products)[number]) => string, winner?: string | null) => ({
+    label,
+    values: products.map(field),
+    winner: winner ?? undefined,
+  });
   const baseRows = [
-    { label: "Chip", left: leftProduct.chip, right: rightProduct.chip, winner: chipWinnerId ?? undefined },
-    { label: "Graphics", left: leftProduct.graphics, right: rightProduct.graphics, winner: graphicsWinnerId ?? undefined },
-    { label: "Memory", left: leftProduct.memory, right: rightProduct.memory },
-    { label: "Storage", left: leftProduct.storage, right: rightProduct.storage },
-    { label: "Display", left: leftProduct.display, right: rightProduct.display, winner: deskWinnerId ?? undefined },
-    { label: "Battery", left: leftProduct.batteryLife, right: rightProduct.batteryLife },
-    { label: "Weight", left: leftProduct.weight, right: rightProduct.weight, winner: carryWinnerId ?? undefined },
-    { label: "Ports", left: leftProduct.ports, right: rightProduct.ports },
+    rowOf("Chip", (p) => p.chip, chipWinnerId),
+    rowOf("Graphics", (p) => p.graphics, graphicsWinnerId),
+    rowOf("Memory", (p) => p.memory),
+    rowOf("Storage", (p) => p.storage),
+    rowOf("Display", (p) => p.display, deskWinnerId),
+    rowOf("Battery", (p) => p.batteryLife),
+    rowOf("Weight", (p) => p.weight, carryWinnerId),
+    rowOf("Ports", (p) => p.ports),
   ];
   const optionalRows = [
-    { label: "Noise profile", left: leftProduct.noiseLevel, right: rightProduct.noiseLevel },
-    { label: "Performance tier", left: leftProduct.performanceTier, right: rightProduct.performanceTier, winner: powerWinnerId ?? undefined },
+    rowOf("Noise profile", (p) => p.noiseLevel),
+    rowOf("Performance tier", (p) => p.performanceTier, powerWinnerId),
   ];
   const compareRows = [
-    ...baseRows.filter((row) => hasRenderableValue(row.left) || hasRenderableValue(row.right)),
-    ...optionalRows.filter((row) => hasRenderableValue(row.left) && hasRenderableValue(row.right)),
+    ...baseRows.filter((row) => row.values.some(hasRenderableValue)),
+    ...optionalRows.filter((row) => row.values.every(hasRenderableValue)),
   ];
 
   const commentary = (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Comparison summary</h4>
-        <p className="mt-3 text-sm leading-6 text-slate-600">{mockCommentary.comparison}</p>
-      </div>
-
       <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
         <h3 className="text-lg font-bold tracking-tight text-slate-950">Implications</h3>
         <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
@@ -307,7 +332,8 @@ export function ComparisonScreen() {
   return (
     <TwoZoneLayout
       commentary={commentary}
-      commentaryTitle="Two-product comparison"
+      commentaryTitle="Side-by-side comparison"
+      showCommentary={!isTriple}
       progressStep={6}
       progressTotal={8}
       stepLabel="Step 6 of 8"
@@ -324,164 +350,167 @@ export function ComparisonScreen() {
                 Side-by-side compare
               </div>
               <div>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Compare your two shortlisted PCs</h1>
+                <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
+                  Compare your {isTriple ? "three" : "two"} shortlisted PCs
+                </h1>
                 <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
-                  This comparison is intentionally limited to two products so the implications stay clear instead of turning into an overloaded spec sheet.
+                  All scored against your needs. Add any PC from the catalog.
                 </p>
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              onClick={clearSelectedProducts}
-              className="rounded-full border-slate-200 bg-white px-5 hover:border-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-            >
-              Clear comparison
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              {!isTriple && (
+                <Button
+                  onClick={() => setSearchOpen(true)}
+                  className="rounded-full bg-[#2563eb] px-5 text-white shadow-[0_10px_30px_rgba(37,99,235,0.25)] hover:bg-[#1d4ed8]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add another PC
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={clearSelectedProducts}
+                className="rounded-full border-slate-200 bg-white px-5 hover:border-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+              >
+                Clear comparison
+              </Button>
+            </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2 items-start">
-            {/* Left Product Header */}
-            <motion.div 
-              onMouseEnter={() => setHoveredId(leftProduct.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.3 }}
-              className={`relative min-w-0 overflow-hidden rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${leftProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
-            >
-              <CometBorderCanvas isHovered={hoveredId === leftProduct.id} cometHue={leftProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
-              <div className="relative z-[2] space-y-5">
-                <div className="flex h-52 w-full items-center justify-center rounded-[24px] bg-[#f8fbff] p-5">
-                  <img
-                    src={leftImage}
-                    alt={leftProduct.model}
-                    className="h-full w-full object-contain"
-                    onError={(event) => {
-                      event.currentTarget.src = leftFallbackVisual.image;
+          <div className={`grid gap-6 items-stretch ${isTriple ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+            {products.map((product, index) => (
+              <motion.div
+                key={product.id}
+                onMouseEnter={() => setHoveredId(product.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.3 }}
+                onClick={() => navigate(`/product/${product.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    navigate(`/product/${product.id}`);
+                  }
+                }}
+                aria-label={`View ${product.model} details`}
+                className={`relative min-w-0 cursor-pointer overflow-hidden rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${product.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
+              >
+                <CometBorderCanvas
+                  isHovered={hoveredId === product.id}
+                  cometHue={product.id === betterPowerProduct.id ? 220 : 270}
+                  radius={30}
+                />
+                {isTriple && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${product.model} from comparison`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleProductSelection(product.id);
                     }}
-                  />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{leftProduct.family}</div>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{leftProduct.model}</h2>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="outline" className="rounded-full border-slate-200 px-3 py-1 text-slate-600">
-                      {leftProduct.bestFor}
-                    </Badge>
+                    className="absolute right-4 top-4 z-[3] flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+                <div className="relative z-[2] space-y-5">
+                  <div className={`flex w-full items-center justify-center rounded-[24px] bg-[#f8fbff] p-5 ${isTriple ? "h-40" : "h-52"}`}>
+                    <img
+                      src={imageFor(product)}
+                      alt={product.model}
+                      className="h-full w-full object-contain"
+                      onError={(event) => {
+                        event.currentTarget.src = fallbackImageFor(product);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{product.family}</div>
+                    <h2 className={`mt-1 font-semibold tracking-tight text-slate-950 ${isTriple ? "text-xl" : "text-2xl"}`}>{product.model}</h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="outline" className="rounded-full border-slate-200 px-3 py-1 text-slate-600">
+                        {product.bestFor}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Best if</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{product.fitSummary}</p>
                   </div>
                 </div>
+              </motion.div>
+            ))}
 
-                <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Best if</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{leftProduct.fitSummary}</p>
+          </div>
+
+          {/* Comparison table: each spec value sits directly under its
+              device column, with the label centered between rows. */}
+          <div className="space-y-5 relative z-10">
+            {compareRows.map((row) => (
+              <div key={row.label} className="space-y-2">
+                <div className="text-center text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  {row.label}
+                </div>
+                <div className={`grid gap-3 ${isTriple ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
+                  {row.values.map((value, index) => (
+                    <motion.div
+                      key={`${row.label}-${products[index]?.id ?? index}`}
+                      whileHover={{ scale: 1.02 }}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center transition-all cursor-default hover:shadow-md hover:border-[#3b82f6]/30"
+                    >
+                      <div className="text-sm font-bold leading-6 text-slate-900 md:text-base">
+                        {hasRenderableValue(value) ? value : "—"}
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               </div>
-            </motion.div>
-
-            {/* Right Product Header */}
-            <motion.div 
-              onMouseEnter={() => setHoveredId(rightProduct.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.3 }}
-              className={`relative min-w-0 overflow-hidden rounded-[30px] border p-5 transition-shadow hover:shadow-xl ${rightProduct.id === betterPowerProduct.id ? "border-blue-100 bg-blue-50/50" : "border-purple-100 bg-purple-50/50"}`}
-            >
-              <CometBorderCanvas isHovered={hoveredId === rightProduct.id} cometHue={rightProduct.id === betterPowerProduct.id ? 220 : 270} radius={30} />
-              <div className="relative z-[2] space-y-5">
-                <div className="flex h-52 w-full items-center justify-center rounded-[24px] bg-[#f8fbff] p-5">
-                  <img
-                    src={rightImage}
-                    alt={rightProduct.model}
-                    className="h-full w-full object-contain"
-                    onError={(event) => {
-                      event.currentTarget.src = rightFallbackVisual.image;
-                    }}
-                  />
-                </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{rightProduct.family}</div>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{rightProduct.model}</h2>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="outline" className="rounded-full border-slate-200 px-3 py-1 text-slate-600">
-                      {rightProduct.bestFor}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-slate-200 bg-white/90 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Best if</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{rightProduct.fitSummary}</p>
-                </div>
-              </div>
-            </motion.div>
+            ))}
           </div>
 
-          {/* Unified Comparison Table with Labels Down the Middle */}
-          <div className="space-y-3 relative z-10">
-            {compareRows.map((row) => {
-              const badge = SHOW_STRONGER_BADGES ? resolveRowBadge(row.label, row.winner) : null;
-              const isLeftWinner = badge?.side === "left";
-              const isRightWinner = badge?.side === "right";
-
-              return (
-                <div key={row.label} className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-6">
-                  {/* Left Value */}
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className={`flex-1 rounded-2xl border p-4 md:text-right transition-all cursor-default ${
-                      isLeftWinner ? "border-emerald-200 bg-emerald-50 hover:shadow-md hover:border-emerald-300" : "border-slate-200 bg-slate-50 hover:shadow-md hover:border-[#3b82f6]/30"
-                    }`}
-                  >
-                    <div className="text-base font-bold leading-6 text-slate-900">{row.left}</div>
-                    {isLeftWinner && <div className="mt-1 text-xs font-semibold text-emerald-700">Stronger</div>}
-                  </motion.div>
-
-                  {/* Label (Middle) */}
-                  <div className="flex-shrink-0 md:w-32 text-center text-sm font-bold uppercase tracking-[0.1em] text-slate-500 py-2 md:py-0">
-                    {row.label}
-                  </div>
-
-                  {/* Right Value */}
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className={`flex-1 rounded-2xl border p-4 md:text-left transition-all cursor-default ${
-                      isRightWinner ? "border-emerald-200 bg-emerald-50 hover:shadow-md hover:border-emerald-300" : "border-slate-200 bg-slate-50 hover:shadow-md hover:border-[#3b82f6]/30"
-                    }`}
-                  >
-                    <div className="text-base font-bold leading-6 text-slate-900">{row.right}</div>
-                    {isRightWinner && <div className="mt-1 text-xs font-semibold text-emerald-700">Stronger</div>}
-                  </motion.div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Implications and Action Buttons */}
-          <div className="grid gap-6 lg:grid-cols-2 items-start pt-6 border-t border-slate-200">
-             {/* Left Actions */}
-             <div className="space-y-5">
+          {/* Implications and Action Buttons — one column per compared PC */}
+          <div className={`grid gap-6 items-start pt-6 border-t border-slate-200 ${isTriple ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+            {products.map((product) => (
+              <div key={product.id} className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-bold tracking-tight text-slate-950">Implications</h3>
-                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                    {leftImplications.map((item) => (
-                      <li key={item} className="flex gap-3">
-                        <Check className="mt-1 h-4 w-4 text-emerald-600 flex-shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <h3 className="text-lg font-bold tracking-tight text-slate-950">
+                    {isTriple ? product.model : "Implications"}
+                  </h3>
+                  {(() => {
+                    const { pros, cons } = resolveImplications(product);
+                    return (
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                        {pros.map((item) => (
+                          <li key={item} className="flex gap-3">
+                            <Check className="mt-1 h-4 w-4 text-emerald-600 flex-shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                        {cons.map((item) => (
+                          <li key={item} className="flex gap-3">
+                            <TriangleAlert className="mt-1 h-4 w-4 text-amber-500 flex-shrink-0" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className={`grid gap-2 ${isTriple ? "" : "sm:grid-cols-2"}`}>
                   <Button
                     variant="outline"
-                    onClick={() => navigate(`/product/${leftProduct.id}`)}
+                    onClick={() => navigate(`/product/${product.id}`)}
                     className="rounded-full border-slate-200 bg-white"
                   >
                     View details
                   </Button>
                   <Button
                     onClick={() => {
-                      setSelectedProductId(leftProduct.id);
+                      setSelectedProductId(product.id);
                       navigate("/handoff");
                     }}
                     className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
@@ -489,39 +518,8 @@ export function ComparisonScreen() {
                     Select this PC
                   </Button>
                 </div>
-             </div>
-             {/* Right Actions */}
-             <div className="space-y-5">
-                <div>
-                  <h3 className="text-lg font-bold tracking-tight text-slate-950">Implications</h3>
-                  <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                    {rightImplications.map((item) => (
-                      <li key={item} className="flex gap-3">
-                        <Check className="mt-1 h-4 w-4 text-emerald-600 flex-shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/product/${rightProduct.id}`)}
-                    className="rounded-full border-slate-200 bg-white"
-                  >
-                    View details
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setSelectedProductId(rightProduct.id);
-                      navigate("/handoff");
-                    }}
-                    className="rounded-full bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
-                  >
-                    Select this PC
-                  </Button>
-                </div>
-             </div>
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-col gap-3 border-t border-slate-200 pt-8 sm:flex-row sm:items-center sm:justify-between">
@@ -550,6 +548,13 @@ export function ComparisonScreen() {
         </GlowCard>
       </div>
       <ProductChatWidget contextProducts={productsToCompare} />
+      <ProductSearchDialog
+        open={searchOpen}
+        sessionId={sessionId}
+        excludeIds={products.map((product) => product.id)}
+        onClose={() => setSearchOpen(false)}
+        onAdd={(record) => addComparisonProduct(mapRecommendationRecord(record))}
+      />
     </TwoZoneLayout>
   );
 }

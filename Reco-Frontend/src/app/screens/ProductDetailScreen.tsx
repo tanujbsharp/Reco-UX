@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileText,
   Info,
@@ -23,7 +25,7 @@ import { getProductPlaceholderImage, mockCommentary, mockProducts, Product } fro
 import { useJourney } from "../context/JourneyContext";
 import { getTagColor } from "../utils/tagColors";
 import { getProduct } from "../services/productApi";
-import { sanitizeCustomerFacingList, sanitizeCustomerFacingText } from "../utils/customerCopy";
+import { formatTagLabel, sanitizeCustomerFacingList, sanitizeCustomerFacingText } from "../utils/customerCopy";
 
 function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -271,8 +273,9 @@ export function ProductDetailScreen() {
     getProduct(numericId)
       .then((data) => {
         if (cancelled) return;
-        if (data && (data.id || data.product_id)) {
-          setApiProduct(mapApiProductRecord(data as Record<string, unknown>));
+        const record = data as Record<string, unknown> | null;
+        if (record && (record.id || record.product_id)) {
+          setApiProduct(mapApiProductRecord(record));
         }
       })
       .catch((err) => {
@@ -308,6 +311,19 @@ export function ProductDetailScreen() {
     return sanitizeGallery(product?.gallery ?? [], sanitizeImage(product?.image ?? "", visualFallbackImage));
   }, [product?.gallery, product?.image, visualFallbackImage]);
   const heroImage = gallery[activeImage] ?? sanitizeImage(product?.image ?? "", visualFallbackImage);
+
+  // Auto-advance the hero image every 5s. Including activeImage in the deps
+  // restarts the timer after a manual arrow/thumbnail change, and we pause
+  // while the lightbox is open.
+  useEffect(() => {
+    if (gallery.length < 2 || lightboxIndex !== null) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setActiveImage((current) => (current + 1) % gallery.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [gallery.length, lightboxIndex, activeImage]);
   const quickSpecs = useMemo(
     () =>
       [
@@ -334,7 +350,7 @@ export function ProductDetailScreen() {
     ? productCatalog.find((item) => item.id === selectedProducts.find((selectedId) => selectedId !== product.id))
     : undefined;
   const isSelected = product ? selectedProducts.includes(product.id) : false;
-  const compareLocked = selectedProducts.length >= 2 && !isSelected;
+  const compareLocked = selectedProducts.length >= 3 && !isSelected;
 
   useEffect(() => {
     setActiveImage(0);
@@ -429,7 +445,7 @@ export function ProductDetailScreen() {
                 key={tag.id}
                 className={`rounded-full border px-3 py-1 text-xs font-medium ${getTagColor(tag.text)}`}
               >
-                {tag.text}
+                {formatTagLabel(tag.text)}
               </span>
             ))
           ) : (
@@ -497,21 +513,57 @@ export function ProductDetailScreen() {
 
             <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr] items-stretch">
               <div className="flex flex-col gap-4 h-full">
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setLightboxIndex(activeImage)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      setLightboxIndex(activeImage);
+                    }
+                  }}
                   aria-label="View image full screen"
-                  className="group flex-1 overflow-hidden rounded-[30px] border border-slate-200 bg-[#f8fbff] flex items-center justify-center min-h-[340px] p-6 cursor-zoom-in transition hover:border-[#3b82f6]/40 hover:shadow-md"
+                  className="group relative flex-1 overflow-hidden rounded-[30px] border border-slate-200 bg-[#f8fbff] flex items-center justify-center min-h-[340px] p-6 cursor-zoom-in transition hover:border-[#3b82f6]/40 hover:shadow-md"
                 >
-                  <img
+                  <motion.img
+                    key={heroImage}
+                    initial={{ opacity: 0.35, scale: 0.985 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.45, ease: [0.25, 0.4, 0.25, 1] }}
                     src={heroImage}
                     alt={product.model}
-                    className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]"
+                    className="h-full w-full object-contain"
                     onError={(event) => {
                       event.currentTarget.src = visualFallbackImage;
                     }}
                   />
-                </button>
+                  {gallery.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Previous image"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActiveImage((current) => (current - 1 + gallery.length) % gallery.length);
+                        }}
+                        className="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 opacity-0 shadow-[0_10px_30px_rgba(15,23,42,0.12)] backdrop-blur transition-all duration-200 hover:bg-white hover:text-[#2563eb] group-hover:opacity-100"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next image"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActiveImage((current) => (current + 1) % gallery.length);
+                        }}
+                        className="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 opacity-0 shadow-[0_10px_30px_rgba(15,23,42,0.12)] backdrop-blur transition-all duration-200 hover:bg-white hover:text-[#2563eb] group-hover:opacity-100"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-3 gap-3 h-24 flex-shrink-0">
                   {gallery.map((image, index) => (
@@ -625,38 +677,39 @@ export function ProductDetailScreen() {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
-                <div className="grid gap-5 lg:grid-cols-2">
-                  <motion.div whileHover={{ scale: 1.01 }} className="rounded-[28px] border border-slate-200 bg-white/90 p-5 hover:shadow-md hover:border-[#3b82f6]/30 transition-all cursor-default">
-                    <div className="flex items-center gap-3">
-                      <Sparkles className="h-5 w-5 text-[#2563eb]" />
-                      <h3 className="text-lg font-semibold text-slate-950">
-                        Recommendation summary
-                      </h3>
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">{product.whyRecommended}</p>
-                  </motion.div>
-                  <motion.div whileHover={{ scale: 1.01 }} className="rounded-[28px] border border-slate-200 bg-white/90 p-5 hover:shadow-md hover:border-[#3b82f6]/30 transition-all cursor-default">
-                    <div className="flex items-center gap-3">
-                      <Info className="h-5 w-5 text-[#2563eb]" />
-                      <h3 className="text-lg font-semibold text-slate-950">Key specs</h3>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      {product.specs.slice(0, 6).map((spec) => (
-                        <div
-                          key={spec.label}
-                          className="rounded-2xl bg-slate-50 px-4 py-3"
-                        >
-                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            {spec.label}
-                          </div>
-                          <div className="mt-2 text-sm font-medium text-slate-900">
-                            {spec.value}
-                          </div>
+                {/* Summary is one short sentence now — stacked full-width rows
+                    use the space better than two tall side-by-side cards. */}
+                <motion.div whileHover={{ scale: 1.01 }} className="rounded-[28px] border border-slate-200 bg-white/90 p-5 hover:shadow-md hover:border-[#3b82f6]/30 transition-all cursor-default">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="h-5 w-5 text-[#2563eb]" />
+                    <h3 className="text-lg font-semibold text-slate-950">
+                      Recommendation summary
+                    </h3>
+                  </div>
+                  <p className="mt-3 text-base leading-7 text-slate-600">{product.whyRecommended}</p>
+                </motion.div>
+
+                <motion.div whileHover={{ scale: 1.01 }} className="rounded-[28px] border border-slate-200 bg-white/90 p-5 hover:shadow-md hover:border-[#3b82f6]/30 transition-all cursor-default">
+                  <div className="flex items-center gap-3">
+                    <Info className="h-5 w-5 text-[#2563eb]" />
+                    <h3 className="text-lg font-semibold text-slate-950">Key specs</h3>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {product.specs.slice(0, 6).map((spec) => (
+                      <div
+                        key={spec.label}
+                        className="rounded-2xl bg-slate-50 px-4 py-3 transition-colors hover:bg-blue-50/60"
+                      >
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          {spec.label}
                         </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                </div>
+                        <div className="mt-2 text-sm font-medium text-slate-900">
+                          {spec.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
 
                 <div className="grid gap-5 lg:grid-cols-2">
                   <motion.div whileHover={{ scale: 1.01 }} className="rounded-[28px] border border-slate-200 bg-white/90 p-5 hover:shadow-md hover:border-[#3b82f6]/30 transition-all cursor-default">
@@ -783,7 +836,7 @@ export function ProductDetailScreen() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="text-sm leading-6 text-slate-600">
                 {compareLocked
-                  ? "Two PCs are already in the comparison tray. Remove one to shortlist this model too."
+                  ? "Comparison full — remove one first."
                   : "Use this action bar to move from detail into shortlist or the store handoff."}
               </div>
 

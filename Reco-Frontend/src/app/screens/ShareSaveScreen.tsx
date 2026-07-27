@@ -6,7 +6,6 @@ import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { mockCommentary } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { CometBorderCanvas } from "../components/CometBorderCanvas";
 import { sanitizeCustomerFacingText } from "../utils/customerCopy";
@@ -72,11 +71,6 @@ export function ShareSaveScreen() {
 
   const commentary = (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-5">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">What gets shared</h4>
-        <p className="mt-3 text-sm leading-6 text-slate-600">{mockCommentary.share}</p>
-      </div>
-
       <div className="rounded-3xl border border-blue-200 bg-blue-50/50 p-5">
         <h4 className="text-sm font-semibold text-blue-950">Preview</h4>
         <div className="mt-4 space-y-3">
@@ -99,7 +93,7 @@ export function ShareSaveScreen() {
     <TwoZoneLayout
       commentary={commentary}
       commentaryTitle="Share & save"
-      commentarySubtitle="Preview the clean summary before sending"
+      commentarySubtitle="Preview before sending"
       progressStep={8}
       progressTotal={8}
       stepLabel="Step 8 of 8"
@@ -219,7 +213,7 @@ export function ShareSaveScreen() {
                           {shareTarget === "email" ? "Email summary prepared" : "WhatsApp draft prepared"}
                         </div>
                         <p className="mt-1 leading-6">
-                          The message content below will be sent to your chosen contact method.
+                          This is what we'll send.
                         </p>
                       </div>
                     </div>

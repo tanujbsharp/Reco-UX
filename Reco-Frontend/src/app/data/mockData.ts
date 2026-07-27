@@ -728,35 +728,15 @@ export const mockExtractedTags = [
 ];
 
 export const mockCommentary = {
-  login:
-    "Launch a polished recommendation journey for in-store tablet use. No backend is needed here, so the experience stays fully demo-ready.",
-  consent:
-    "Collect just enough information to personalize the journey and support the in-store handoff later.",
-  voiceIdle:
-    "Customers can speak or type naturally. We extract the important buying signals and turn them into editable preference tags before any structured questions appear.",
-  voiceRecording:
-    "Listening for workflow, portability needs, screen preference, and buying signals such as battery, performance, or ports.",
-  voiceProcessing:
-    "Turning natural language into clean recommendation signals and preparing the structured follow-up questions.",
   voiceResults:
-    "Great, we have a usable profile. Confirm or refine these tags before we narrow the catalog down further.",
+    "Confirm or tweak these tags before we narrow things down.",
   questions: {
-    q1: "This tells us whether to prioritize a practical student machine, a coding-friendly option, or something built for creative or heavier work.",
-    q2: "Mobility helps separate lighter daily-carry laptops from larger desk-first options.",
-    q3: "Screen feel matters because comfort, carry weight, and workspace often pull in different directions.",
-    q4: "This is where we avoid over-recommending premium power if your use case does not actually need it.",
-    q5: "The final tie-breaker helps us choose between a safer everyday fit and a machine with more headroom or polish.",
+    q1: "Tells us who we're optimizing for.",
+    q2: "Separates daily-carry from desk-first machines.",
+    q3: "Comfort, weight, and workspace pull in different directions.",
+    q4: "Stops us recommending power you don't need.",
+    q5: "Final tie-breaker: safe everyday fit vs extra headroom.",
   },
-  processing:
-    "We are combining your open-input signals with the structured answers to rank the strongest PC fits.",
-  recommendations:
-    "These PC recommendations balance portability, battery, screen size, and workflow fit. Use the commentary rail to understand why each option stood out.",
-  comparison:
-    "Comparing two PCs side by side makes the trade-offs concrete: carry weight versus screen size, silent design versus thermal headroom, and value versus future-proofing.",
   productDetail:
-    "The full spec view, gallery, and fit summary are here to help you feel confident in your choice.",
-  handoff:
-    "The handoff stays lightweight: selected product, your details, and the key requirements gathered in the journey.",
-  share:
-    "Share keeps the message simple and polished: what was recommended, why it fits, and how you can continue the conversation.",
+    "Specs, gallery, and fit — everything to decide confidently.",
 };

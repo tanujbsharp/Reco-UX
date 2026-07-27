@@ -33,6 +33,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
+import { ProgressDonut } from "../components/ProgressDonut";
 import { ExpandableCommentaryCard } from "../components/ExpandableCommentaryCard";
 import { GlowCard } from "../components/GlowCard";
 import { Button } from "../components/ui/button";
@@ -71,7 +72,7 @@ const iconMap = {
 } as const;
 
 const additionalSpecsQuestionId = "q-additional-specs";
-const additionalSpecsQuestionText = "Any additional specifications, must-haves, or deal-breakers we should factor in?";
+const additionalSpecsQuestionText = "Anything else we should know?";
 const preferredAudioMimeTypes = [
   "audio/webm;codecs=opus",
   "audio/webm",
@@ -117,7 +118,7 @@ function ensureOtherOption(question: Question): Question {
   };
 }
 
-const fallbackGuidedQuestions: Question[] = [
+const fallbackGuidedQuestions: Question[] = ([
   {
     id: "fallback-q1",
     type: "single-choice",
@@ -152,7 +153,7 @@ const fallbackGuidedQuestions: Question[] = [
     ],
   },
   ...mockQuestions.slice(2, 5),
-].map((question) => ensureOtherOption(question));
+] as Question[]).map((question) => ensureOtherOption(question));
 
 // The first two questions are deterministic (they establish the primary user
 // and the use cases). The frontend owns them so they always appear first —
@@ -305,6 +306,22 @@ export function GuidedQuestionsScreen() {
     },
     [currentQuestion?.prefillFromTags, voiceTags]
   );
+
+  // Multi-choice options float to the top as they're selected (including the
+  // ones pre-selected from the discovery description). "Other" stays pinned
+  // last; single-choice questions keep their natural order.
+  const displayedOptions = useMemo(() => {
+    if (!currentQuestion) {
+      return [] as QuestionOption[];
+    }
+    if (currentQuestion.type !== "multi-choice") {
+      return currentQuestion.options;
+    }
+    const selectedValues = Array.isArray(selectedValue) ? selectedValue : [];
+    const rank = (option: QuestionOption) =>
+      option.label === "Other" ? 2 : selectedValues.includes(option.label) ? 0 : 1;
+    return [...currentQuestion.options].sort((a, b) => rank(a) - rank(b));
+  }, [currentQuestion, selectedValue]);
 
   // Combined free-text signal from the spoken/typed discovery brief plus tags.
   const discoverySignalText = useMemo(
@@ -600,7 +617,7 @@ export function GuidedQuestionsScreen() {
           setAdditionalSpecsFromVoice(true);
         } catch (error) {
           console.error("Additional specs transcription failed:", error);
-          setAdditionalVoiceError("We couldn't transcribe that recording. Please try again or type your note.");
+          setAdditionalVoiceError("Couldn't catch that — try again or type.");
         } finally {
           setAdditionalVoiceState("idle");
         }
@@ -624,11 +641,11 @@ export function GuidedQuestionsScreen() {
       setIsSubmittingAnswer(true);
       setQuestionsError(null);
       try {
-        nextData = await submitAnswerApi(sessionId, {
+        nextData = (await submitAnswerApi(sessionId, {
           question_text: prepared.answer.questionText ?? prepared.answer.questionId,
           answer_value: prepared.answerText,
           from_voice: prepared.answer.fromVoice,
-        });
+        })) as Record<string, unknown> | null;
       } catch (err) {
         console.error("Failed to save answer:", err);
         setQuestionsError("Could not save that answer. Please try again.");
@@ -769,7 +786,12 @@ export function GuidedQuestionsScreen() {
         signalPrefillLabels.includes(option.label));
 
     return (
-      <div key={option.label} className="space-y-3">
+      <motion.div
+        key={option.label}
+        layout
+        transition={{ duration: 0.35, ease: [0.25, 0.4, 0.25, 1] }}
+        className="space-y-3"
+      >
         <motion.button
           type="button"
           whileHover={{ scale: 1.01 }}
@@ -840,7 +862,7 @@ export function GuidedQuestionsScreen() {
               />
             </motion.div>
           )}
-      </div>
+      </motion.div>
     );
   };
 
@@ -884,21 +906,21 @@ export function GuidedQuestionsScreen() {
       </ExpandableCommentaryCard>
 
       <div className="rounded-3xl border border-purple-200 bg-purple-50/50 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-lg font-bold tracking-tight text-purple-950">Progress</h3>
-          <span className="text-sm text-purple-700 font-medium">
-            {showAdditionalSpecsStep ? "Final note" : `${currentIndex + 1} / ${usingLLMQuestions ? estimatedTotalQuestions : questions.length}`}
-          </span>
-        </div>
-        <div className="mt-4 flex gap-2">
-          {Array.from({ length: usingLLMQuestions ? estimatedTotalQuestions : questions.length }).map((_, index) => (
-            <div
-              key={index}
-              className={`h-2 rounded-full transition-all ${
-                index <= currentIndex || showAdditionalSpecsStep ? "w-8 bg-purple-600" : "w-2 bg-purple-200"
-              }`}
-            />
-          ))}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight text-purple-950">Progress</h3>
+            <p className="mt-1 text-sm font-medium text-purple-700">
+              {showAdditionalSpecsStep
+                ? "Final note"
+                : `Question ${currentIndex + 1} of ${usingLLMQuestions ? estimatedTotalQuestions : questions.length}`}
+            </p>
+          </div>
+          <ProgressDonut
+            current={showAdditionalSpecsStep ? 1 : currentIndex + 1}
+            total={showAdditionalSpecsStep ? 1 : usingLLMQuestions ? estimatedTotalQuestions : questions.length}
+            size={64}
+            strokeWidth={6}
+          />
         </div>
       </div>
 
@@ -906,7 +928,7 @@ export function GuidedQuestionsScreen() {
         <h4 className="text-sm font-semibold text-emerald-950">Answers so far</h4>
         <div className="mt-4 space-y-3">
           {answersSummary.length === 0 ? (
-            <p className="text-sm leading-6 text-emerald-700">Your running summary will build here as you move through the cards.</p>
+            <p className="text-sm leading-6 text-emerald-700">Your answers will appear here.</p>
           ) : (
             answersSummary.map((entry) => (
               <div key={entry.id} className="rounded-2xl border border-emerald-100 bg-white/70 p-4">
@@ -1043,10 +1065,10 @@ export function GuidedQuestionsScreen() {
                       Final details
                     </div>
                     <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-                      Anything else we should factor in before recommending?
+                      Anything else we should know?
                     </h1>
                     <p className="max-w-3xl text-base leading-7 text-slate-600">
-                      Add any extra must-haves, deal-breakers, software needs, gaming titles, accessories, or setup details. This is optional, but it will be included if you type it.
+                      Must-haves, deal-breakers, specific apps or games — all optional.
                     </p>
                   </div>
 
@@ -1064,7 +1086,7 @@ export function GuidedQuestionsScreen() {
                     <div>
                       <div className="text-sm font-semibold text-slate-900">Prefer speaking this note?</div>
                       <p className="mt-1 text-sm text-slate-500">
-                        Record a short note and we&apos;ll transcribe it into the box above.
+                        Record a note — we&apos;ll type it for you.
                       </p>
                     </div>
                     <Button
@@ -1142,7 +1164,7 @@ export function GuidedQuestionsScreen() {
                     )}
                   </div>
 
-                  <div className="grid gap-4">{currentQuestion?.options.map((option) => renderOptionCard(option))}</div>
+                  <div className="grid gap-4">{displayedOptions.map((option) => renderOptionCard(option))}</div>
                 </div>
               )}
 

@@ -33,22 +33,28 @@ EXPLANATION_SYSTEM_PROMPT = (
     "Your task is to explain why a specific product was recommended to a "
     "customer based on their stated preferences, voice tags, and the "
     "product's features and scoring breakdown.\n\n"
-    "Be conversational, helpful, and honest. Mention both strengths and "
-    "trade-offs. Keep the explanation concise but informative.\n\n"
+    "Be helpful and honest. Mention both strengths and trade-offs.\n\n"
+    "STYLE — TERSE PHRASES, NOT PROSE: every field is read at a glance on a "
+    "retail screen. Write like spec-sheet callouts a salesperson would say, "
+    "not paragraphs. No filler ('this laptop offers', 'you will enjoy', "
+    "'making it ideal for'), no trailing punctuation on list items.\n\n"
     "Do not mention internal scores, weights, percentages, decimal fit values, "
     "or scoring math in any customer-facing field. Convert those signals into "
-    "plain natural language instead.\n\n"
+    "plain natural language instead. Never mention price, cost, affordability, "
+    "or value-for-money in any field — pricing is handled elsewhere in the store.\n\n"
     "You MUST respond with ONLY valid JSON matching this schema:\n"
     "{\n"
-    '  "whyRecommended": "string — 1-2 sentence summary of why this product fits",\n'
-    '  "fitSummary": "string — brief overall fit assessment",\n'
-    '  "fitLabel": "string — 3-8 word customer-context badge for the recommendation card",\n'
-    '  "keyHighlights": ["string — key product highlight relevant to customer", ...],\n'
-    '  "matchedBenefits": ["string — benefit that matches customer need", ...],\n'
-    '  "tradeOffs": ["string — honest trade-off to be aware of", ...],\n'
-    '  "pros": ["string — advantage of this product", ...],\n'
-    '  "cons": ["string — disadvantage or limitation", ...]\n'
+    '  "whyRecommended": "string — ONE short sentence, max 15 words, naming the customer\'s need it solves",\n'
+    '  "fitSummary": "string — one terse phrase, max 10 words (e.g. \'Strong coding power with touch for notes\')",\n'
+    '  "fitLabel": "string — 3-6 word customer-context badge for the recommendation card",\n'
+    '  "keyHighlights": ["string — terse 2-4 word chip label (e.g. \'16-inch OLED display\', \'All-day battery\'), NEVER a full sentence", ...],\n'
+    '  "matchedBenefits": ["string — 3-6 word phrase tying a feature to their need (e.g. \'Runs Valorant and GTA smoothly\')", ...],\n'
+    '  "tradeOffs": ["string — 3-6 word honest caveat (e.g. \'Heavier than typical ultrabooks\')", ...],\n'
+    '  "pros": ["string — 2-5 word advantage", ...],\n'
+    '  "cons": ["string — 2-5 word limitation", ...]\n'
     "}\n\n"
+    "keyHighlights are rendered as small UI chips: each must be a punchy phrase of at most 4 words "
+    "(no verbs needed, no trailing punctuation). "
     "The fitLabel must describe why this product fits THIS customer, not the product's generic catalog positioning. "
     "For example, prefer labels like 'Student coding and AI coursework' or 'Parent-friendly streaming and browsing' "
     "over generic labels like 'Premium video watching' when that is not the customer's main use case.\n\n"

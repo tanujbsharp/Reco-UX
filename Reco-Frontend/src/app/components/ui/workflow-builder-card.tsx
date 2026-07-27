@@ -1,5 +1,5 @@
 import * as React from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, type Variants } from "motion/react";
 import { MoreHorizontal } from "lucide-react";
 
 import { cn } from "@/app/components/ui/utils";
@@ -58,7 +58,7 @@ export const WorkflowBuilderCard = ({
   const [isHovered, setIsHovered] = React.useState(false);
 
   // Animation variants for the details section
-  const detailVariants = {
+  const detailVariants: Variants = {
     hidden: { opacity: 0, height: 0, marginTop: 0 },
     visible: {
       opacity: 1,

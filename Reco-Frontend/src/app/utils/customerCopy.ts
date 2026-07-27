@@ -43,3 +43,20 @@ export function sanitizeCustomerFacingList(values: unknown) {
   const single = sanitizeCustomerFacingText(values);
   return single ? [single] : [];
 }
+
+/**
+ * Customer-facing tag labels: "basic-computing" -> "Basic Computing".
+ * Tags are stored lowercase/hyphenated for matching; always display them
+ * through this helper.
+ */
+export function formatTagLabel(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}

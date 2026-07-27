@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowRight, Check, Scale, Star } from "lucide-react";
+import { ArrowRight, Check, Scale, Star, X } from "lucide-react";
 import { TwoZoneLayout } from "../components/TwoZoneLayout";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { getProductPlaceholderImage, mockCommentary, Product } from "../data/mockData";
+import { getProductPlaceholderImage, Product } from "../data/mockData";
 import { useJourney } from "../context/JourneyContext";
 import { getTagColor } from "../utils/tagColors";
 import { sanitizeCustomerFacingList, sanitizeCustomerFacingText } from "../utils/customerCopy";
@@ -16,6 +16,9 @@ import { getRecommendations } from "../services/recommendationApi";
 import { submitFeedback } from "../services/feedbackApi";
 import { ProcessingScreen } from "./ProcessingScreen";
 import { GlowCard } from "../components/GlowCard";
+
+// Hidden per request — flip to bring the button back.
+const SHOW_ADJUST_PREFERENCES = false;
 
 const rankConfig = [
   { label: "#1 Best Match", badgeClass: "bg-emerald-500 text-white", barClass: "from-emerald-400 to-emerald-600", ringClass: "ring-emerald-200" },
@@ -110,6 +113,7 @@ export function RecommendationsScreen() {
     toggleProductSelection,
     recommendationFeedbackStars,
     setRecommendationFeedbackStars,
+    availableProducts,
     setAvailableProducts,
   } = useJourney();
   const [feedbackHover, setFeedbackHover] = useState<number | null>(null);
@@ -136,13 +140,18 @@ export function RecommendationsScreen() {
       .then((data) => {
         if (cancelled) return;
         console.log("[Reco] API response:", data);
-        const recs = Array.isArray(data) ? data : data?.recommendations;
+        const recs = Array.isArray(data) ? data : (data as { recommendations?: unknown[] })?.recommendations;
         if (Array.isArray(recs) && recs.length > 0) {
           console.log("[Reco] Got", recs.length, "real recommendations");
           // Map API products to the Product shape used by the UI
           const mapped: Product[] = recs.map((r: Record<string, unknown>) => mapRecommendationRecord(r));
           setProducts(mapped);
-          setAvailableProducts(mapped);
+          // Merge, don't overwrite: products added to the comparison from
+          // catalog search must survive a return trip to this screen.
+          setAvailableProducts((prev) => [
+            ...mapped,
+            ...prev.filter((p) => !mapped.some((m) => m.id === p.id)),
+          ]);
         } else {
           console.warn("[Reco] API returned empty recommendations");
           setError("No recommendations generated yet. The engine may still be processing.");
@@ -161,6 +170,32 @@ export function RecommendationsScreen() {
   }, [sessionId]);
 
   const recommendedProducts = products;
+
+  // Comparison picks that aren't in the top-3 list (added via catalog search
+  // on the comparison screen). Shown in a strip so the shopper can swap them
+  // out for a recommended PC without getting stuck at 3/3.
+  const extraCompareProducts = useMemo(
+    () =>
+      selectedProducts
+        .filter((id) => !products.some((p) => p.id === id))
+        .map((id) => availableProducts.find((p) => p.id === id))
+        .filter((p): p is Product => Boolean(p)),
+    [selectedProducts, products, availableProducts],
+  );
+
+  // Drop selections that can no longer be resolved at all (e.g. a searched
+  // product lost to a hard refresh) so the counter can't get stuck.
+  useEffect(() => {
+    if (loading || products.length === 0) {
+      return;
+    }
+    selectedProducts.forEach((id) => {
+      const resolvable = products.some((p) => p.id === id) || availableProducts.some((p) => p.id === id);
+      if (!resolvable) {
+        toggleProductSelection(id);
+      }
+    });
+  }, [loading, products, selectedProducts, availableProducts, toggleProductSelection]);
   const [activeProductId, setActiveProductId] = useState<string>("");
 
   // Set initial active product when products load
@@ -176,7 +211,7 @@ export function RecommendationsScreen() {
     recommendedProducts.findIndex((p) => p.id === activeProduct.id),
   );
   const activeRank = rankConfig[activeProductIndex] ?? rankConfig[2];
-  const compareLimitReached = selectedProducts.length >= 2;
+  const compareLimitReached = selectedProducts.length >= 3;
 
   if (loading) {
     return <ProcessingScreen autoRedirect={false} />;
@@ -211,14 +246,6 @@ export function RecommendationsScreen() {
 
   const commentary = (
     <div className="space-y-4">
-      <ExpandableCommentaryCard
-        title="Why these stood out"
-        className="border-[#2563eb]/15 bg-[#2563eb]/5"
-        titleClassName="text-blue-800"
-      >
-        <p className="text-sm leading-6 text-slate-600">{mockCommentary.recommendations}</p>
-      </ExpandableCommentaryCard>
-
       {/* Animated product detail — updates when activeProductId changes */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -258,18 +285,18 @@ export function RecommendationsScreen() {
 
       <div
         className={`rounded-3xl border p-5 transition-colors duration-300 ${
-          compareLimitReached ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white/90"
+          selectedProducts.length >= 2 ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white/90"
         }`}
       >
         <h4 className="text-sm font-semibold text-slate-900">Comparison selection</h4>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          {compareLimitReached
-            ? "Two PCs selected and ready for side-by-side comparison."
-            : "Select exactly two PCs to compare side by side with full implications."}
+          {selectedProducts.length >= 2
+            ? "Ready to compare side by side."
+            : "Pick 2–3 PCs to compare."}
         </p>
-        {compareLimitReached && (
+        {selectedProducts.length >= 2 && (
           <div className="mt-3 text-sm font-semibold text-emerald-700">
-            {selectedProducts.length}/2 selected ✓
+            {selectedProducts.length}/3 selected ✓
           </div>
         )}
       </div>
@@ -303,12 +330,12 @@ export function RecommendationsScreen() {
               <div>
                 <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Your top PC recommendations</h1>
                 <p className="mt-2 max-w-3xl text-base leading-7 text-slate-600">
-                  A premium shortlist ranked by fit. Tap any card to see the full rationale in the panel.
+                  Ranked by fit — tap a card for full details.
                 </p>
               </div>
             </div>
             <AnimatePresence>
-              {compareLimitReached && (
+              {selectedProducts.length >= 2 && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -350,7 +377,10 @@ export function RecommendationsScreen() {
                   transition={{ delay: 0.08 + index * 0.12, duration: 0.46, ease: [0.22, 1, 0.36, 1] }}
                   style={{ willChange: "transform, opacity" }}
                   className="relative"
-                  onMouseEnter={() => setHoveredId(product.id)}
+                  onMouseEnter={() => {
+                    setHoveredId(product.id);
+                    setActiveProductId(product.id);
+                  }}
                   onMouseLeave={() => setHoveredId(null)}
                 >
                   {/* Canvas comet — constant physical speed, covers all edges evenly */}
@@ -365,8 +395,17 @@ export function RecommendationsScreen() {
 
                   {/* Card body — sits below canvas comet (z-2 < z-3) */}
                   <div
+                    onClick={() => navigate(`/product/${product.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        navigate(`/product/${product.id}`);
+                      }
+                    }}
+                    aria-label={`View ${product.model} details`}
                     className={cn(
-                      "mouse-tracker relative z-[2] overflow-hidden rounded-[24px] border shadow-[0_4px_24px_rgba(15,23,42,0.07)] backdrop-blur-sm transition-shadow duration-300",
+                      "mouse-tracker relative z-[2] cursor-pointer overflow-hidden rounded-[24px] border shadow-[0_4px_24px_rgba(15,23,42,0.07)] backdrop-blur-sm transition-shadow duration-300",
                       hoveredId === product.id && "shadow-[0_16px_48px_rgba(15,23,42,0.12)]",
                       isActive
                         ? `border-transparent ring-2 ${rank.ringClass}`
@@ -460,7 +499,10 @@ export function RecommendationsScreen() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setActiveProductId(product.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setActiveProductId(product.id);
+                            }}
                             className={`rounded-full px-4 text-sm ${
                               isActive ? "bg-[#2563eb]/10 font-medium text-[#2563eb]" : "text-slate-600 hover:bg-white hover:text-[#2563eb]"
                             }`}
@@ -470,7 +512,10 @@ export function RecommendationsScreen() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => toggleProductSelection(product.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleProductSelection(product.id);
+                            }}
                             disabled={disableCompare}
                             className={cn(
                               "h-10 gap-2 rounded-full px-5 text-sm font-semibold shadow-sm transition-[transform,box-shadow,border-color,background-color] disabled:!opacity-100",
@@ -493,7 +538,10 @@ export function RecommendationsScreen() {
                           </Button>
                           <Button
                             size="sm"
-                            onClick={() => navigate(`/product/${product.id}`)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(`/product/${product.id}`);
+                            }}
                             className="ml-auto rounded-full bg-[#2563eb] px-5 text-sm text-white hover:bg-[#1d4ed8]"
                           >
                             View Full Details
@@ -565,8 +613,43 @@ export function RecommendationsScreen() {
             )}
           </motion.div>
 
+          {/* Comparison picks from outside the recommendation list */}
+          {extraCompareProducts.length > 0 && (
+            <div className="rounded-[26px] border border-blue-100 bg-blue-50/40 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">
+                Also in your comparison
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {extraCompareProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/90 py-2 pl-2 pr-3 shadow-sm"
+                  >
+                    <div className="flex h-10 w-14 items-center justify-center overflow-hidden rounded-xl bg-[#f8fbff]">
+                      <img src={product.image} alt={product.model} className="h-full w-full object-contain" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900">{product.model}</div>
+                      <div className="text-xs text-slate-500">Added from catalog search</div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${product.model} from comparison`}
+                      onClick={() => toggleProductSelection(product.id)}
+                      className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Bottom actions */}
-          <div className="flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-end">
+            {/* "Adjust preferences" hidden for now — flip to re-enable. */}
+            {SHOW_ADJUST_PREFERENCES && (
             <Button
               variant="outline"
               size="lg"
@@ -575,20 +658,21 @@ export function RecommendationsScreen() {
             >
               Adjust preferences
             </Button>
+            )}
             <Button
               variant="outline"
               size="lg"
-              disabled={selectedProducts.length !== 2}
+              disabled={selectedProducts.length < 2}
               onClick={() => navigate("/comparison")}
               className={cn(
                 "min-h-[3.25rem] gap-2 rounded-full px-8 py-3 text-base font-semibold transition-[transform,box-shadow,filter] disabled:!opacity-100",
-                selectedProducts.length === 2
+                selectedProducts.length >= 2
                   ? "!border-0 bg-gradient-to-r from-[#2563eb] via-indigo-600 to-violet-600 !text-white shadow-[0_14px_44px_-10px_rgba(37,99,235,0.55),0_8px_24px_-8px_rgba(99,102,241,0.35)] hover:!bg-gradient-to-r hover:brightness-[1.06] hover:shadow-[0_18px_52px_-10px_rgba(37,99,235,0.58)] active:scale-[0.99]"
                   : "!border-2 !border-dashed !border-slate-300 !bg-slate-100/95 !text-slate-500 shadow-none hover:!bg-slate-100"
               )}
             >
               <Scale className="h-5 w-5 shrink-0 opacity-90" />
-              Open comparison ({selectedProducts.length}/2)
+              Open comparison ({selectedProducts.length}/3)
               <ArrowRight className="h-4 w-4 shrink-0" />
             </Button>
           </div>
